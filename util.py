@@ -12,6 +12,14 @@ def fetch_and_cache(data_url, file, data_dir="data", force=False):
     force: if true the file is always re-downloaded 
     
     return: The pathlib.Path object representing the file.
+
+	EXAMPLE USAGE:
+    data_url = 'https://s3-us-west-2.amazonaws.com/multimedia-berkeley/Flickr.tar.gz',
+    data_filename = 'nus-wide.tar.gz',
+    fetch_and_cache(data_url = image_data_url,
+    				data_dir = RAW_DATA_DIR,
+                    file = image_data_filename,
+                    force = False)
     """
     data_dir = Path(data_dir)
     data_dir.mkdir(exist_ok = True)
