@@ -15,10 +15,11 @@ def fetch_and_cache(data_url, file, data_dir="data", force=False):
 
 	EXAMPLE USAGE:
     data_url = 'https://s3-us-west-2.amazonaws.com/multimedia-berkeley/Flickr.tar.gz',
+    data_directory = './data'
     data_filename = 'nus-wide.tar.gz',
-    fetch_and_cache(data_url = image_data_url,
-    				data_dir = RAW_DATA_DIR,
-                    file = image_data_filename,
+    fetch_and_cache(data_url = data_url,
+    				data_dir = data_directory,
+                    file = data_filename,
                     force = False)
     """
     data_dir = Path(data_dir)
