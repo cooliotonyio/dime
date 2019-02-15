@@ -1,7 +1,7 @@
 import numpy as np
 import pickle
 
-fname = 'nuswide_metadata/All_Tags.txt'
+fname = 'data/nuswide_metadata/All_Tags.txt'
 
 with open(fname) as f:
     content = f.readlines()
