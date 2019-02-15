@@ -4,8 +4,7 @@ import sys
 import torch
 import pickle
 import tarfile
-from pathlib import Path
-from util import fetch_and_cache
+from zipfile import ZipFile
 
 print("Making directories...", end="\t")
 if not os.path.isdir("./data_zipped"):
@@ -24,11 +23,14 @@ print("Downloading NUSWIDE_metadata...")
 if not os.path.isdir("./data/nuswide_metadata"):
     os.mkdir(os.fsencode("./data/nuswide_metadata"))
     os.system("wget -O data_zipped/nuswide_metadata/NUS_WID_Tags.zip http://dl.nextcenter.org/public/nuswide/NUS_WID_Tags.zip")
-    os.system("unzip data_zipped/nuswide_metadata/NUS_WID_Tags.zip -d data/nuswide_metadata/")
     os.system("wget -O data_zipped/nuswide_metadata/Groundtruth.zip http://dl.nextcenter.org/public/nuswide/Groundtruth.zip")
-    os.system("unzip data_zipped/nuswide_metadata/Groundtruth.zip -d data/nuswide_metadata/")
     os.system("wget -O data_zipped/nuswide_metadata/Concepts.zip http://dl.nextcenter.org/public/nuswide/ConceptsList.zip")
-    os.system("unzip data_zipped/nuswide_metadata/Concepts.zip -d data/nuswide_metadata/")
+    with ZipFile('data_zipped/nuswide_metadata/NUS_WID_Tags.zip', 'r') as data_zipped:
+        data_zipped.extractall(path = "data/nuswide_metadata/")
+    with ZipFile('data_zipped/nuswide_metadata/Groudtruth.zip', 'r') as data_zipped:
+        data_zipped.extractall(path = "data/nuswide_metadata/")
+    with ZipFile('data_zipped/nuswide_metadata/Concepts.zip', 'r') as data_zipped:
+        data_zipped.extractall(path = "data/nuswide_metadata/")
 print("Done")
 
 print("Running nuswide processing scripts to make pickles..")
