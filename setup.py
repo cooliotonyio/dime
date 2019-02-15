@@ -82,8 +82,4 @@ image_data = tarfile.open("./data_zipped/flickr.tar.gz")
 image_data.extractall(path='./data')
 print("Done extracting NUSWIDE!")
 
-print("Moving pickled models", end = " ")
-os.system("mv entire_nuswide_model.p pickles/models/")
-print("Done!")
-
 print("Finished setup!")
