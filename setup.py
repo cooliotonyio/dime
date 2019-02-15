@@ -1,12 +1,13 @@
 import os
 import io
-import sys
 import torch
 import pickle
 import tarfile
 from zipfile import ZipFile
+from util import fetch_and_cache
 
-print("Making directories...", end="\t")
+print("Starting setup... This might take a while.")
+print("Making directories...", end=" ")
 if not os.path.isdir("./data_zipped"):
     os.mkdir(os.fsencode('./data_zipped'))
 if not os.path.isdir("./data"):
@@ -20,30 +21,41 @@ if not os.path.isdir("./pickles"):
 print("Done!")
 
 print("Downloading NUSWIDE_metadata...")
-if not os.path.isdir("./data/nuswide_metadata"):
-    os.mkdir(os.fsencode("./data/nuswide_metadata"))
-    os.system("wget -O data_zipped/nuswide_metadata/NUS_WID_Tags.zip http://dl.nextcenter.org/public/nuswide/NUS_WID_Tags.zip")
-    os.system("wget -O data_zipped/nuswide_metadata/Groundtruth.zip http://dl.nextcenter.org/public/nuswide/Groundtruth.zip")
-    os.system("wget -O data_zipped/nuswide_metadata/Concepts.zip http://dl.nextcenter.org/public/nuswide/ConceptsList.zip")
-    with ZipFile('data_zipped/nuswide_metadata/NUS_WID_Tags.zip', 'r') as data_zipped:
-        data_zipped.extractall(path = "data/nuswide_metadata/")
-    with ZipFile('data_zipped/nuswide_metadata/Groudtruth.zip', 'r') as data_zipped:
-        data_zipped.extractall(path = "data/nuswide_metadata/")
-    with ZipFile('data_zipped/nuswide_metadata/Concepts.zip', 'r') as data_zipped:
-        data_zipped.extractall(path = "data/nuswide_metadata/")
-print("Done")
+fetch_and_cache(data_url = 'http://dl.nextcenter.org/public/nuswide/NUS_WID_Tags.zip',
+                file = 'tags.zip',
+                data_dir = './data_zipped')
+fetch_and_cache(data_url = 'http://dl.nextcenter.org/public/nuswide/Groundtruth.zip',
+                file = 'groundtruth.zip',
+                data_dir = './data_zipped')
+fetch_and_cache(data_url = 'http://dl.nextcenter.org/public/nuswide/ConceptsList.zip',
+                file = 'concepts.zip',
+                data_dir = './data_zipped')
 
-print("Running nuswide processing scripts to make pickles..")
+print("Extracting NUSWIDE_metadata...", end=" ")
+with ZipFile('data_zipped/tags.zip', 'r') as data_zipped:
+    data_zipped.extractall(path = "data/nuswide_metadata/")
+with ZipFile('data_zipped/groundtruth.zip', 'r') as data_zipped:
+    data_zipped.extractall(path = "data/nuswide_metadata/")
+with ZipFile('data_zipped/concepts.zip', 'r') as data_zipped:
+    data_zipped.extractall(path = "data/nuswide_metadata/")
+print("Done!")
+
+
+print("Running nuswide processing scripts to make pickles...", end = " " )
 os.system("python3 nuswide_processing_scripts/make_relevancy_matrix.py")
 os.system("python3 nuswide_processing_scripts/make_tag_matrix.py")
 os.system("python3 nuswide_processing_scripts/make_concepts.py")
-print("Done")
+print("Done!")
 
+print("Downloading the FastText word embeddings... (this might take some time)")
+fetch_and_cache(data_url = 'https://dl.fbaipublicfiles.com/fasttext/vectors-english/wiki-news-300d-1M.vec.zip',
+                file = 'word_vecs.zip',
+                data_dir = './data_zipped')
 
-print("Downloading the FastText word embeddings")
-os.system("wget -O data_zipped/wiki-news-300d-1M.vec.zip https://dl.fbaipublicfiles.com/fasttext/vectors-english/wiki-news-300d-1M.vec.zip")
-os.system("unzip data_zipped/wiki-news-300d-1M.vec.zip -d data/")
-print("Done")
+print("Extracting FastText word embeddings...", end =" ")
+with ZipFile('data_zipped/word_vecs.zip', 'r') as data_zipped:
+    data_zipped.extractall(path = "data/")
+print("Done!")
 
 
 def load_vectors(fname):
@@ -55,16 +67,23 @@ def load_vectors(fname):
         data[tokens[0]] = torch.FloatTensor(list(map(float, tokens[1:])))
     return data
 
-print("Processing the word vectors and pickling them...")
+print("Processing the word vectors and pickling them... (this might take some time)")
 text_dictionary = load_vectors('data/wiki-news-300d-1M.vec')
 pickle.dump(text_dictionary, open('pickles/word_embeddings/word_embeddings_tensors.p', 'wb'))
-os.system("mv entire_nuswide_model.p pickles/models/")
-print("Done")
+print("Done processing!")
 
-print("Downloading and extracting NUSWIDE...")
-if not os.path.isdir("./data/Flickr"):
-    os.system("wget -O data_zipped/flickr.tar.gz https://s3-us-west-2.amazonaws.com/multimedia-berkeley/Flickr.tar.gz")
-    print("Extracting...")
-    image_data = tarfile.open("Flickr.tar.gz")
-    image_data.extractall(path='./data')
-print("Done")
+print("Downloading NUSWIDE...(this will take a lot of time)")
+fetch_and_cache(data_url = 'https://s3-us-west-2.amazonaws.com/multimedia-berkeley/Flickr.tar.gz',  
+                file = "flickr.tar.gz", 
+                data_dir = "./data_zipped")
+      
+print("Extracting NUSWIDE...", end = " ")
+image_data = tarfile.open("./data_zipped/flickr.tar.gz")
+image_data.extractall(path='./data')
+print("Done!")
+
+print("Moving pickled models", end = " ")
+os.system("mv entire_nuswide_model.p pickles/models/")
+print("Done!")
+
+print("Finished setup!")
