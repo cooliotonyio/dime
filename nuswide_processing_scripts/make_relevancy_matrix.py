@@ -2,7 +2,7 @@ import numpy as np
 import pickle
 import os
 
-path = 'nuswide_metadata/AllLabels/'
+path = 'data/nuswide_metadata/AllLabels/'
 n = 269648
 relevancy_matrix = np.zeros((n,81), dtype=int)
 filenames = []
