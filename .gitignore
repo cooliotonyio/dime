@@ -1,0 +1,6 @@
+Flickr/
+Flickr.tar.gz
+__pycache__
+.ipynb_checkpoints
+pickles/
+nuswide_metadata/
