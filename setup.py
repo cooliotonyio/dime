@@ -21,8 +21,8 @@ if not os.path.isdir("./pickles"):
 print("Done!")
 
 print("Downloading NUSWIDE_metadata...")
-if not os.path.isdir("./nuswide_metadata"):
-    os.mkdir(os.fsencode("./nuswide_metadata"))
+if not os.path.isdir("./data/nuswide_metadata"):
+    os.mkdir(os.fsencode("./data/nuswide_metadata"))
     os.system("wget -O data_zipped/nuswide_metadata/NUS_WID_Tags.zip http://dl.nextcenter.org/public/nuswide/NUS_WID_Tags.zip")
     os.system("unzip data_zipped/nuswide_metadata/NUS_WID_Tags.zip -d data/nuswide_metadata/")
     os.system("wget -O data_zipped/nuswide_metadata/Groundtruth.zip http://dl.nextcenter.org/public/nuswide/Groundtruth.zip")
