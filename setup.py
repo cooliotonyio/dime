@@ -31,17 +31,17 @@ fetch_and_cache(data_url = 'http://dl.nextcenter.org/public/nuswide/ConceptsList
                 file = 'concepts.zip',
                 data_dir = './data_zipped')
 
-print("Extracting NUSWIDE_metadata...", end=" ")
+print("Extracting NUSWIDE metadata...")
 with ZipFile('data_zipped/tags.zip', 'r') as data_zipped:
     data_zipped.extractall(path = "data/nuswide_metadata/")
 with ZipFile('data_zipped/groundtruth.zip', 'r') as data_zipped:
     data_zipped.extractall(path = "data/nuswide_metadata/")
 with ZipFile('data_zipped/concepts.zip', 'r') as data_zipped:
     data_zipped.extractall(path = "data/nuswide_metadata/")
-print("Done!")
+print("Done extracting NUSWIDE metadata!")
 
 
-print("Running nuswide processing scripts to make pickles...", end = " " )
+print("Processing NUSWIDE metadata to make pickles...", end = " " )
 os.system("python3 nuswide_processing_scripts/make_relevancy_matrix.py")
 os.system("python3 nuswide_processing_scripts/make_tag_matrix.py")
 os.system("python3 nuswide_processing_scripts/make_concepts.py")
@@ -52,10 +52,10 @@ fetch_and_cache(data_url = 'https://dl.fbaipublicfiles.com/fasttext/vectors-engl
                 file = 'word_vecs.zip',
                 data_dir = './data_zipped')
 
-print("Extracting FastText word embeddings...", end =" ")
+print("Extracting FastText word embeddings...")
 with ZipFile('data_zipped/word_vecs.zip', 'r') as data_zipped:
     data_zipped.extractall(path = "data/")
-print("Done!")
+print("Done extracting FastText word embeddings!")
 
 
 def load_vectors(fname):
@@ -70,17 +70,17 @@ def load_vectors(fname):
 print("Processing the word vectors and pickling them... (this might take some time)")
 text_dictionary = load_vectors('data/wiki-news-300d-1M.vec')
 pickle.dump(text_dictionary, open('pickles/word_embeddings/word_embeddings_tensors.p', 'wb'))
-print("Done processing!")
+print("Done processing word vectors!")
 
 print("Downloading NUSWIDE...(this will take a lot of time)")
 fetch_and_cache(data_url = 'https://s3-us-west-2.amazonaws.com/multimedia-berkeley/Flickr.tar.gz',  
                 file = "flickr.tar.gz", 
                 data_dir = "./data_zipped")
       
-print("Extracting NUSWIDE...", end = " ")
+print("Extracting NUSWIDE... (this might take some time)")
 image_data = tarfile.open("./data_zipped/flickr.tar.gz")
 image_data.extractall(path='./data')
-print("Done!")
+print("Done extracting NUSWIDE!")
 
 print("Moving pickled models", end = " ")
 os.system("mv entire_nuswide_model.p pickles/models/")
