@@ -15,17 +15,6 @@ if not os.path.isdir("./pickles"):
     os.mkdir(os.fsencode(init + '/nuswide_metadata'))
 print("Done")
 
-print("Downloading and extracting NUSWIDE...")
-if not os.path.isdir("./Flickr"):
-    image_data_url = 'https://s3-us-west-2.amazonaws.com/multimedia-berkeley/Flickr.tar.gz'
-    image_data_filename = 'nus-wide.tar.gz'
-    fetch_and_cache(data_url = image_data_url, data_dir = ".", file = image_data_filename, force = False)
-    image_data = tarfile.open("./" + image_data_filename)
-    image_data.extractall()
-    os.system("rm nus-wide.tar.gz")
-print("Done")
-
-
 print("Downloading NUSWIDE_metadata...")
 if not os.path.isdir("./nuswide_metadata"):
     os.mkdir(os.fsencode("./nuswide_metadata"))
@@ -72,4 +61,13 @@ os.system("rm wiki-news-300d-1M.vec")
 os.system("rm wiki-news-300d-1M.vec.zip")
 
 os.system("mv entire_nuswide_model.p pickles/models/")
+print("Done")
+
+print("Downloading and extracting NUSWIDE...")
+if not os.path.isdir("./Flickr"):
+    image_data_url = 'https://s3-us-west-2.amazonaws.com/multimedia-berkeley/Flickr.tar.gz'
+    image_data_filename = 'nus-wide.tar.gz'
+    fetch_and_cache(data_url = image_data_url, data_dir = ".", file = image_data_filename, force = False)
+    image_data = tarfile.open("./" + image_data_filename)
+    image_data.extractall()
 print("Done")
