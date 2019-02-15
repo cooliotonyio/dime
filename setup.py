@@ -3,6 +3,8 @@ import io
 import sys
 import torch
 import pickle
+import tarfile
+from util import fetch_and_cache
 
 print("Making pickles directory tree...")
 if not os.path.isdir("./pickles"):
@@ -13,9 +15,15 @@ if not os.path.isdir("./pickles"):
     os.mkdir(os.fsencode(init + '/nuswide_metadata'))
 print("Done")
 
+print("Downloading and extracting NUSWIDE...")
 if not os.path.isdir("./Flickr"):
-    print("Extract the NUSWIDE dataset into the repository directory, it should be named Flickr.")
-    sys.exit()
+    image_data_url = 'https://s3-us-west-2.amazonaws.com/multimedia-berkeley/Flickr.tar.gz'
+    image_data_filename = 'nus-wide.tar.gz'
+    fetch_and_cache(data_url = image_data_url, data_dir = ".", file = image_data_filename, force = False)
+    image_data = tarfile.open("./" + image_data_filename)
+    image_data.extractall()
+    os.system("rm 'nus-wide.tar.gz")
+print("Done")
 
 
 print("Downloading NUSWIDE_metadata...")
