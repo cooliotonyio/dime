@@ -22,7 +22,7 @@ if not os.path.isdir("./Flickr"):
     fetch_and_cache(data_url = image_data_url, data_dir = ".", file = image_data_filename, force = False)
     image_data = tarfile.open("./" + image_data_filename)
     image_data.extractall()
-    os.system("rm 'nus-wide.tar.gz")
+    os.system("rm nus-wide.tar.gz")
 print("Done")
 
 
