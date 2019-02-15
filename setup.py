@@ -24,12 +24,12 @@ if not os.path.isdir("./data_zipped"):
     os.mkdir(os.fsencode('./data_zipped'))
 if not os.path.isdir("./data"):
     os.mkdir(os.fsencode('./data'))
-if not os.path.isdir("./pickles"):
-    init = "./pickles"
-    os.mkdir(os.fsencode(init))
-    os.mkdir(os.fsencode(init + '/word_embeddings'))
-    os.mkdir(os.fsencode(init + '/models'))
-    os.mkdir(os.fsencode(init + '/nuswide_metadata'))
+if not os.path.isdir("./pickles/word_embeddings"):
+    os.mkdir(os.fsencode("./pickles/word_embeddings"))
+if not os.path.isdir("./pickles/models"):
+    os.mkdir(os.fsencode("./pickles/models"))
+if not os.path.isdir("./pickles/nuswide_metadata"):
+    os.mkdir(os.fsencode("./pickles/nuswide_metadata"))
 print("Done!")
 
 print("Downloading NUSWIDE_metadata...")
@@ -56,11 +56,11 @@ with ZipFile('data_zipped/concepts.zip', 'r') as data_zipped:
 print("Done extracting NUSWIDE metadata!")
 
 
-print("Processing NUSWIDE metadata to make pickles...", end = " " )
+print("Processing and pickling NUSWIDE metadata...")
 os.system("python3 nuswide_processing_scripts/make_relevancy_matrix.py")
 os.system("python3 nuswide_processing_scripts/make_tag_matrix.py")
 os.system("python3 nuswide_processing_scripts/make_concepts.py")
-print("Done!")
+print("Done processing and pickling NUSWIDE metadata!")
 
 print("Downloading the FastText word embeddings... (this might take some time)")
 fetch_and_cache(data_url = 'https://dl.fbaipublicfiles.com/fasttext/vectors-english/wiki-news-300d-1M.vec.zip',
