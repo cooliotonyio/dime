@@ -66,6 +66,7 @@ print("Done")
 print("Downloading and extracting NUSWIDE...")
 if not os.path.isdir("./Flickr"):
     os.system("wget https://s3-us-west-2.amazonaws.com/multimedia-berkeley/Flickr.tar.gz")
+    print("Extracting...")
     image_data = tarfile.open("Flickr.tar.gz")
     image_data.extractall()
 print("Done")
