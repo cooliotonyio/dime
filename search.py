@@ -10,6 +10,19 @@ from sklearn.preprocessing import binarize
 class SearchEngine():
     '''
     Search Engine Class
+    
+    Attributes: 
+        embedding_net (neural network): Neural network to pass in tensors and receive embeddings
+        embedding_dimension (int): Dimension of embeddings outputted by neural network
+        cuda (bool): If True, enables CUDA for featurizing data
+        is_binarized (bool): If True, all embeddings are binarized
+        threshold (float): Threshold level for binarization
+        save_directory (string): Directory to save/load embeddings
+        embeddings_name (string): Name for filenames of embeddings
+        index (faiss index): Index of featurized data
+    
+    Methods:
+        
     '''
     
     def __init__(self, embedding_net, embedding_dimension, cuda = None, is_binarized = True, threshold = 0, save_directory = None, embeddings_name = "embeddings"):
