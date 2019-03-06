@@ -1,22 +1,19 @@
 import csv
-from torchvision import transforms
 from datasets import NUS_WIDE
-import torchvision as tv
-
 import pickle
 
+import torchvision as tv
+from torchvision import transforms
 import torch
 from torch.optim import lr_scheduler
 import torch.optim as optim
 from torch.autograd import Variable
-
 from trainer import fit
 import numpy as np
 
+from networks import TextEmbeddingNet, EmbeddingNet, InterTripletNet
+from losses import InterTripletLoss
 cuda = torch.cuda.is_available()
-
-import matplotlib
-import matplotlib.pyplot as plt
 
 mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
 
@@ -57,7 +54,6 @@ print("Loading in concept matrix")
 concept_matrix = pickle.load(open("pickles/nuswide_metadata/concept_matrix.p", "rb"))
 print("Done")
 
-
 # creating indices for training data and validation data
 print("Making training and validation indices...")
 from torch.utils.data.sampler import SubsetRandomSampler
@@ -75,22 +71,15 @@ train_sampler = SubsetRandomSampler(train_indices)
 validation_sampler = SubsetRandomSampler(val_indices)
 print("Done.")
 
-# setting up loaders
-from networks import textEmbedding
-from losses import InterTripletLoss
-from networks import InterTripletNet
-
+# making loaders
 batch_size = 256
 kwargs = {'num_workers': 32, 'pin_memory': True} if cuda else {}
 i_triplet_train_loader = torch.utils.data.DataLoader(dataset,  batch_size=batch_size, sampler=train_sampler, **kwargs)
 i_triplet_val_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=validation_sampler, **kwargs)
 
 # Set up the network and training parameters
-from networks import EmbeddingNet, TripletNet
-from losses import TripletLoss
-
 margin = 1.
-text_embedding_net = textEmbedding()
+text_embedding_net = TextEmbeddingNet()
 image_embedding_net = EmbeddingNet()
 model = InterTripletNet(image_embedding_net, text_embedding_net)
 if cuda:

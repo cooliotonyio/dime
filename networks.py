@@ -9,10 +9,6 @@ import io
 class EmbeddingNet(nn.Module):
     def __init__(self):
         super(EmbeddingNet, self).__init__()
-#        self.convnet = nn.Sequential(nn.Conv2d(3, 32, 5), nn.PReLU(),
-#                                     nn.MaxPool2d(3, stride=2),
-#                                     nn.Conv2d(32, 64, 5), nn.PReLU(),
-#                                     nn.MaxPool2d(3, stride=2))
         self.convnet = models.resnet18(pretrained=True)
         self.convnet_layer = self.convnet._modules.get('avgpool')
         self.convnet.eval()
@@ -55,9 +51,9 @@ class EmbeddingNetL2(EmbeddingNet):
     def get_embedding(self, x):
         return self.forward(x)
 
-class textEmbedding(nn.Module):
+class TextEmbeddingNet(nn.Module):
     def __init__(self):
-        super(textEmbedding, self).__init__()
+        super(TextEmbeddingNet, self).__init__()
         self.fc = nn.Sequential(nn.Linear(300, 128),
                 nn.PReLU(),
                 nn.Linear(128, 128),
@@ -66,7 +62,19 @@ class textEmbedding(nn.Module):
 
     def forward(self, x):
         return self.fc(x)
-
+    
+class TwoStreamVideoEmbeddingNet(nn.Module):
+    def __init__(self):
+        super(TwoStreamVideoEmbeddingNet, self).__init__()
+        self.fc == nn.Sequential(nn.Linear(2560, 1024),
+                                 nn.PReLU(),
+                                 nn.Linear(1024, 512),
+                                 nn.PreLU(),
+                                 nn.Linear(512, 128))
+        
+    def forward(self, spatial_feat, temporal_feat):
+        video_embedding = torch.cat((spatial_feat, temporal_feat), dim=1)
+        return self.fc(video_embedding)
 
 class ClassificationNet(nn.Module):
     def __init__(self, embedding_net, n_classes):
@@ -135,3 +143,27 @@ class InterTripletNet(nn.Module):
 
     def get_embedding_word(self, x):
         return self.text_embedding_net(x)
+    
+class IntermodalTripletNet(nn.Module):
+    
+    def __init__(self, modalityOne_net, modalityTwo_net):
+        super(IntermodalTripletNet, self).__init__()
+        self.modalityOneNet = modalityOne_net
+        self.modalityTwoNet = modalityTwo_net
+        
+    def forward(self, a_v, p_t, n_t, a_t, p_v, n_v):
+        output_anch1 = self.modalityOneNet(a_v)
+        output_pos2 = self.modalityTwoNet(p_t)
+        output_neg2 = self.modalityTwoNet(n_t)
+        
+        output_anch2 = self.modalityTwoNet(a_t)
+        output_pos1 = self.modalityOneNet(p_v)
+        output_neg1 = self.modalityOneNet(n_v)
+        
+        return output_anch1, output_pos2, output_neg2, output_anch1, output_pos1, output_neg1
+    
+    def get_modOne_embedding(self, x):
+        return self.modalityOneNet(x)
+    
+    def get_modTwo_embedding(self, x):
+        return self.modalityTwoNet(x)
