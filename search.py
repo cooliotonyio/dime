@@ -21,7 +21,12 @@ class SearchEngine():
         embeddings_name (string): Name for filenames of embeddings
         index (faiss index): Index of featurized data
     
-    Methods:
+    User Methods:
+        fit()
+        text_to_tensor()
+        image_to_tensor()
+        get_embedding()
+        search()
         
     '''
     
@@ -244,7 +249,7 @@ class SearchEngine():
 
     def image_to_tensor(self, image, transform):
         '''
-        Turns image into a tensor
+        Turns image into a tensor using transform
         
         Called by User
         
@@ -260,7 +265,7 @@ class SearchEngine():
    
     def text_to_tensor(self, text, tensor_dict):
         '''
-        Turns text into a tensor
+        Turns text into a tensor using tensor_dict
         
         Called by User
         
