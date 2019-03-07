@@ -84,7 +84,7 @@ class SearchEngine():
             embeddings = self.embedding_net.get_embedding(*data)
             if self.is_binarized:
                 embeddings = binarize(embeddings.detach(), threshold=self.threshold)
-            yield batch_idx, embeddings
+            yield batch_idx, embeddings.cpu().detach().numpy()
         
     def update_index(self, embeddings):
         '''
@@ -119,7 +119,7 @@ class SearchEngine():
             embeddings = self.load_batch(filenames[batch_idx])
             yield batch_idx, embeddings
             
-    def resolve_loader(data, save_embeddings, load_embeddings, verbose, step_size):
+    def resolve_loader(self, data, save_embeddings, load_embeddings, verbose, step_size):
         '''
         Just sanity checks before fitting data. Moved this here for cleaer code
         
@@ -147,15 +147,14 @@ class SearchEngine():
                     else:
                         return False, "Cannot save embeddings", None
                     
-        if (not load embeddings) and (not data):
+        if (not load_embeddings) and (not data):
             return False, "Data not provided", None
         
         if load_embeddings:
-            save_embeddings = False
             loader = self.load_embeddings()
         else:
             loader = self.featurize_data(data)
-        
+        #TODO: enable loading .npy AND data
         return True, "Sanity checks passed.", loader
         
 
@@ -180,13 +179,13 @@ class SearchEngine():
         '''
         start_time = time.time()
         
-        passed, message, loader = self.resolve_loader(data, save_embedding, load_embeddings, verbose, step_size)
+        passed, message, loader = self.resolve_loader(data, save_embeddings, load_embeddings, verbose, step_size)
         if not passed:
             raise Exception("Sanity checks not passed")
         if verbose:
             print(message)
             
-        num_batches = len(loader)
+        num_batches = len(data)
         batch_magnitude = len(str(num_batches))
 
         for batch_idx, embeddings in loader:
@@ -219,12 +218,12 @@ class SearchEngine():
         if self.is_binarized:
             np.save(path, np.packbits(batch.astype(bool)))
         else:
-            np.save(path, batch)
+            np.save(path, batch.astype('float32'))
                 
     def load_batch(self, filename):
         '''
         Load batch from a filename
-        Unpacks bits if binarized
+        Unpacks bits if self.is_binarized
         
         Called by SearchEngine.load_embeddings()
         
@@ -237,10 +236,11 @@ class SearchEngine():
         path = "{}/{}".format(self.save_directory, filename)
         if self.is_binarized:
             batch = np.unpackbits(np.load(path)).astype('float32')
+            dims, rows = self.embedding_dimension, len(batch) // self.embedding_dimension
+            batch = batch.reshape(rows, dims)
         else:
             batch = np.load(path).astype('float32')
-        dims, rows = self.embedding_dimension, len(batch) // self.embedding_dimension
-        return batch.reshape(rows, dims)
+        return batch
 
     def image_to_tensor(self, image, transform):
         '''
