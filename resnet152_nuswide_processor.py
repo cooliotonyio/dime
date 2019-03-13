@@ -42,8 +42,8 @@ for p in resnet152.parameters():
     p.requires_grad = False
 
 def get_image_feature(im_path):
-    img = Image.open(im_path)
-    t_img = Variable(normalize(to_tensor(scaler(img)).cuda()).unsqueeze(0))
+    img = Image.open(im_path).convert('RGB')
+    t_img = Variable(normalize(to_tensor(scaler(img))).unsqueeze(0)).cuda()
     feature = resnet152(t_img).data
     return feature
 
