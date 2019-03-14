@@ -50,14 +50,14 @@ def get_image_feature(im_path):
 dataset = NUS_WIDE('./data/Flickr', None)
 
 feature_dict = {}
-feature_array = []
+feature_array = [None] * len(dataset)
 
 for i in range(len(dataset)):
     print("file: ", i)
     file_path = dataset.imgs.samples[i][0]
     feature_i = get_image_feature(file_path)
     feature_dict[file_path] = feature_i
-    feature_array.append(feature_i)
+    feature_array[i] = feature_i.cpu().unsqueeze()
 
 pickle.dump(feature_dict, open(base + 'resnet152_nuswide_feats_dict.p', 'wb'))
 pickle.dump(feature_array, open(base + 'resnet152_nuswide_feats_arr.p', 'wb'))
