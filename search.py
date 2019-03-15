@@ -7,6 +7,23 @@ import time
 from torchvision import transforms
 from sklearn.preprocessing import binarize
 
+class EmbeddingModel():
+    '''
+    Wrapper Class around a neural network
+    '''
+    def __init__(self, net, name, modality, input_dimension, output_dimension, cuda):
+        self.net = net
+        self.name = name
+        self.modality = modality
+        self.input_dimension = input_dimension
+        self.output_dimension = output_dimension
+        self.cuda = cuda
+        if self.cuda:
+            self.net.cuda()
+    
+    def get_embedding(self, tensor):
+        return self.net.get_embedding(tensor)
+
 class SearchEngine():
     '''
     Search Engine Class
@@ -30,7 +47,7 @@ class SearchEngine():
         
     '''
     
-    def __init__(self, embedding_net, embedding_dimension, cuda = None, is_binarized = True, threshold = 0, save_directory = None, embeddings_name = "embeddings"):
+    def __init__(self, modalities, cuda = None, save_directory = None, verbose = False):
         '''
         Initializes SearchEngine object
         
@@ -49,23 +66,67 @@ class SearchEngine():
         SearchEngine: SearchEngine object
         '''
         
-        self.embedding_net = embedding_net
-        self.embedding_dimension = embedding_dimension
         self.cuda = cuda
-        self.is_binarized = is_binarized
-        self.threshold = threshold
         self.save_directory = save_directory
-        self.embeddings_name = embeddings_name
+        self.verbose = verbose
         
         # Initialize index
-        self.index = faiss.IndexFlatL2(embedding_dimension)
+        self.indexes = {}
+        self.models = {}
+        self.datasets = {}
+        self.modalities = {}
 
-        # GPU acceleration of net and index
-        if self.cuda:
-            self.embedding_net.cuda()
-#             res = faiss.StandardGpuResources()
-#             self.index = faiss.index_cpu_to_gpu(res, 0, self.index)
+        for modality in modalities:
+            self.modalities[modality] = {
+                'models': []
+                'indexes': []
+            }
 
+    def build_index(self, dataset_name, models = None, binarized = False, threshold = 0):
+
+        dataset = self.datasets[dataset_name]
+
+        if models is None:
+            models = self.modalities[modality]['models']
+
+        for model in models:
+            assert model.input_dimension == dataset['dimension'], "Model input dimension does not match dimension of dataset"
+            index = faiss.IndexFlatL2(model.output_dimension)
+            data = dataset['data']
+
+            key = (model.name, dataset_name, binarized)
+
+            self.indexes[key] = index
+            self.modalities[dataset.modality]['indexes'].append(key)
+
+            #TODO: Cuda() index
+            #TODO: fit data
+    
+    def add_model(self, net, name, modality, input_dimension, output_dimension):
+
+        assert (name not in self.models), "Model with given name already in self.models"
+        assert (modality in self.modalities), "Modality not supported by SearchEngine"
+
+        model = EmbeddingModel(net, name, modality, input_dimension, output_dimension, self.cuda)
+        self.models[name] = model
+        self.modalities[modality]['models'].append(name)
+
+    def print_models(self):
+        print("{} \t {} \t {}".format("Index", "Model Name", "Modality"))
+        for i, key in enumerate(self.models):
+            model = self.models[key]
+            print("{} \t {} \t {}".format(i, model.name, model.modality))
+
+    def add_dataset(self, dataset_name, data, modality, dimension):
+        assert (dataset_name not in self.datasets), "Dataset with dataset_name already in self.datasets"
+        assert (modality in self.modalities), "Modality not supported by SearchEngine"
+        dataset = {
+            'name': dataset_name,
+            'data': data,
+            'modality': modality
+            'dimension': dimension
+        }
+        self.datasets[dataset_name] = dataset
 
     def featurize_data(self, data):
         '''
@@ -90,21 +151,6 @@ class SearchEngine():
             if self.is_binarized:
                 embeddings = binarize(embeddings.detach(), threshold=self.threshold)
             yield batch_idx, embeddings.cpu().detach().numpy()
-        
-    def update_index(self, embeddings):
-        '''
-        Adds embeddings into index non-destructively
-        
-        Called by SearchEngine.fit()
-        
-        Parameters:
-        embeddings (arraylike): embeddings to add to index
-        
-        Returns:
-        None
-        '''
-        assert self.index.is_trained
-        self.index.add(embeddings)
     
     def load_embeddings(self):
         '''
@@ -119,6 +165,7 @@ class SearchEngine():
         int: Batch index
         arraylike: Embeddings received from passing data through net
         '''
+        #TODO: fix
         filenames = sorted([filename for filename in os.listdir(self.save_directory) if filename[-3:] == "npy"])
         for batch_idx in range(len(filenames)):
             embeddings = self.load_batch(filenames[batch_idx])
@@ -163,7 +210,7 @@ class SearchEngine():
         return True, "Sanity checks passed.", loader
         
 
-    def fit(self, data=None, save_embeddings = False, load_embeddings = False, verbose = False, step_size = 100):
+    def fit(self, index, model_name, dataset_name, save_embeddings = False, load_embeddings = False):
         '''
         Main function to
             1) Featurize (and optionally binarize) data into embeddings OR load embeddings without data
@@ -187,21 +234,21 @@ class SearchEngine():
         passed, message, loader = self.resolve_loader(data, save_embeddings, load_embeddings, verbose, step_size)
         if not passed:
             raise Exception("Sanity checks not passed")
-        if verbose:
+        if self.verbose:
             print(message)
             
         num_batches = len(data)
         batch_magnitude = len(str(num_batches))
 
         for batch_idx, embeddings in loader:
-            if verbose and not (batch_idx % step_size):
+            if self.verbose and not (batch_idx % step_size):
                 print("Batch {} of {}".format(batch_idx, num_batches))
             if save_embeddings:
-                filename = "{}_batch_{}".format(self.embeddings_name, str(batch_idx).zfill(batch_magnitude))
+                filename = "{}/{}/batch_{}".format(dataset_name, model_name, str(batch_idx).zfill(batch_magnitude))
                 self.save_batch(embeddings, filename)
-            self.update_index(embeddings)
+            index.add(embeddings)
             
-        if verbose:
+        if self.verbose:
             time_elapsed = time.time() - start_time
             print("Finished building index in {} seconds.".format(round(time_elapsed, 4)))
         
@@ -219,6 +266,7 @@ class SearchEngine():
         Returns:
         None
         '''
+        
         path = "{}/{}.npy".format(self.save_directory, filename)
         if self.is_binarized:
             np.save(path, np.packbits(batch.astype(bool)))
@@ -247,60 +295,6 @@ class SearchEngine():
             batch = np.load(path).astype('float32')
         return batch
 
-    def image_to_tensor(self, image, transform):
-        '''
-        Turns image into a tensor using transform
-        
-        Called by User
-        
-        Parameters:
-        image (PIL.Image): Image to turn into 
-        transform (torchvision.Transform): Transform to perform over image
-        
-        Returns:
-        tensor: The provided image's tensor
-        '''
-        tensor = transform(image)[None,:,:,:]
-        return tensor
-   
-    def text_to_tensor(self, text, tensor_dict):
-        '''
-        Turns text into a tensor using tensor_dict
-        
-        Called by User
-        
-        Parameters:
-        text (string): String to turn into tensor
-        tensor_dict (dict): dictionary to look up text
-        
-        Returns:
-        tensor: The provided string's tensor
-        '''
-        if text not in tensor_dict:
-            raise Exception("Word not in dictionary")
-        return tensor_dict[text]
-
-    def get_embedding(self, data):
-        '''
-        Featurizes data into an embedding
-        
-        Called by User
-        
-        Parameters:
-        data (tensor): Data tensor to featurize
-        
-        Returns:
-        arraylike: Embedding of featurized data
-        '''
-        if not type(data) in (tuple, list):
-            data = (data,)
-        if self.cuda:
-            data = tuple(d.cuda() for d in data)
-        embedding = self.embedding_net.get_embedding(*data).detach()
-        if self.is_binarized:
-            embedding = binarize(embedding, self.threshold)
-        return embedding
-
     def search(self, embeddings, n=5, verbose=False):
         '''
         Searches index for nearest n neighbors for each embedding in embeddings
@@ -316,6 +310,7 @@ class SearchEngine():
         list: List of lists of distances of neighbors
         list: List of lists of indexes of neighbors
         '''
+        # TODO: Fix
         start_time = time.time()
         distances, idxs = self.index.search(embeddings, n)
         elapsed_time = time.time() - start_time
