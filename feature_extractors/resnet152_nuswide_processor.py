@@ -25,7 +25,7 @@ from PIL import Image
 
 from datasets import NUS_WIDE
 
-base = "./pickles/nuswide_features/"
+base = "../pickles/nuswide_features/"
 if not os.path.isdir(base):
     os.mkdir(os.fsencode(base))
 
