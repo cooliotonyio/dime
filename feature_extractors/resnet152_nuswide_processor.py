@@ -1,18 +1,3 @@
-"""
-This script passes through the entire nuswide dataset through a pretrained resnet152 model. The features
-are stored in both dictionary and array formats, resnet152_nuswide_feats_dict.p & resnet152_nuswide_feats_arr.p
-respectively. The dictionary object maps file path names to the feature which is stored as a FloatTensor object
-
-Note:
-    The file_path will be in respects to the root of the directory. The dictionary keys will be as such:
-
-     ./data/Flickr/actor/0001_2124494179.jpg
-
-
-The pickles containing the dictionary and array objects will be stored in ./pickles/nuswide_features/
-
-"""
-
 import os
 import io
 import torch
@@ -25,7 +10,7 @@ from PIL import Image
 
 from datasets import NUS_WIDE
 
-base = "../pickles/nuswide_features/"
+base = "./"
 if not os.path.isdir(base):
     os.mkdir(os.fsencode(base))
 
@@ -34,18 +19,24 @@ normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 
 to_tensor = transforms.ToTensor()
 
 resnet152 = models.resnet152(pretrained=True)
-modules = list(resnet152.children())[:-1]
-resnet152 = torch.nn.Sequential(*modules)
+resnet152_layer = resnet152._modules.get('avgpool')
+resnet152.eval()
 resnet152.cuda()
 
-for p in resnet152.parameters():
-    p.requires_grad = False
 
 def get_image_feature(im_path):
+    embedding = torch.cuda.FloatTensor(1, 2048, 1, 1).fill_(0)
     img = Image.open(im_path).convert('RGB')
     t_img = Variable(normalize(to_tensor(scaler(img))).unsqueeze(0)).cuda()
-    feature = resnet152(t_img).data
-    return feature
+
+    def copy_data(m,i,o):
+        embedding.copy_(o.data)
+
+    h = resnet152_layer.register_forward_hook(copy_data)
+    resnet152(t_img)
+    h.remove()
+
+    return embedding
 
 dataset = NUS_WIDE('./data/Flickr', None)
 
@@ -57,7 +48,7 @@ for i in range(len(dataset)):
     file_path = dataset.imgs.samples[i][0]
     feature_i = get_image_feature(file_path)
     feature_dict[file_path] = feature_i
-    feature_array[i] = feature_i.cpu().unsqueeze()
+    feature_array[i] = feature_i.cpu().squeeze()
 
 pickle.dump(feature_dict, open(base + 'resnet152_nuswide_feats_dict.p', 'wb'))
 pickle.dump(feature_array, open(base + 'resnet152_nuswide_feats_arr.p', 'wb'))
