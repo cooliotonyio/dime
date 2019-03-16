@@ -8,9 +8,10 @@ import torch
 
 
 class NUS_WIDE(Dataset):
-    def __init__(self, root, transform):
+    def __init__(self, root, transform, features=None):
         self.imgs = tv.datasets.ImageFolder(root=root)
         self.transform = transform
+        self.features = features
 
     def __getitem__(self, index):
         """
@@ -19,8 +20,12 @@ class NUS_WIDE(Dataset):
         Returns:
             tuple: (index, sample, target) where target is class_index of the target class.
         """
+        if self.features is not None:
+            return index, self.features[index], self.imgs[index][1]
+
         if self.transform is not None:
             return index, self.transform(self.imgs[index][0]), self.imgs[index][1]
+
         return index, self.data[index], self.labels[index]
 
     def __len__(self):
@@ -79,10 +84,11 @@ class NUS_WIDE(Dataset):
 
 # Dataset used for nearest neighbors loading
 class NUS_WIDE_KNN(Dataset):
-    def __init__(self, root, transform, text_labels):
+    def __init__(self, root, transform, text_labels, features=None):
         self.imgs = tv.datasets.ImageFolder(root=root)
         self.transform = transform
         self.text_labels = text_labels
+        self.features = features
 
     def __getitem__(self, index):
         """
@@ -91,6 +97,8 @@ class NUS_WIDE_KNN(Dataset):
         Returns:
             tuple: (sample, target) where target is class_index of the target class.
         """
+        if self.features is not None:
+            return self.features[index], index
         return self.transform(self.imgs[index][0]), index
 
     def get_text_label(self, index):
