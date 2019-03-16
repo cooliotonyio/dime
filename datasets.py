@@ -5,81 +5,71 @@ from torchvision import transforms
 from torch.utils.data import Dataset
 from torch.utils.data.sampler import BatchSampler
 import torch
+import pickle
 
 
 class NUS_WIDE(Dataset):
-    def __init__(self, root, transform, features=None):
+    def __init__(self, root, transform, features='resnet152'):
         self.imgs = tv.datasets.ImageFolder(root=root)
         self.transform = transform
-        self.features = features
+        
+        if features == 'resnet152':
+            self.features, self.feature_mode = pickle.load(open("pickles/nuswide_features/resnet152_nuswide_feats_arr.p","rb")), 'resnet152'
+        elif features == 'resnet18':
+            self.features, self.feature_mode = pickle.load(open("pickles/nuswide_features/resnet18_nuswide_feats_arr.p", "rb")), 'resnet18'
+        else:
+            self.features, self.feature_mode = None, 'vanilla'
+            
+        self.positive_concept_matrix = pickle.load(open("pickles/nuswide_metadata/concept_matrix.p", "rb"))
+        self.negative_concept_matrix = pickle.load(open("pickles/nuswide_metadata/neg_concept_matrix.p", "rb"))
+        self.relevancy_matrix = pickle.load(open("pickles/nuswide_metadata/relevancy_matrix.p", "rb"))
+        self.tag_matrix = pickle.load(open("pickles/nuswide_metadata/tag_matrix.p", "rb"))
+        self.folder_labels = pickle.load(open("pickles/nuswide_metadata/folder_labels.p", "rb"))
 
     def __getitem__(self, index):
         """
         Args:
             index (int): Index
         Returns:
-            tuple: (index, sample, target) where target is class_index of the target class.
+            tuple: (index, data, target) where target is class_index of the target class.
         """
-        if self.features is not None:
+        if self.feature_mode is not 'vanilla':
             return index, self.features[index], self.imgs[index][1]
 
         if self.transform is not None:
             return index, self.transform(self.imgs[index][0]), self.imgs[index][1]
 
         return index, self.data[index], self.labels[index]
-
+    
+    def get_concepts(self, index):
+        """
+        Args:
+            index (int): Index of image
+        Returns:
+            List of concepts (strings) for the image 
+        """
+        return self.positive_concept_matrix[index]
+    
+    def get_negative_concepts(self, index):
+        """
+        Args:
+            index (int): Index of image
+        Returns:
+            List of negative concepts (strings) for the image 
+        """
+        return self.negative_concept_matrix[index]
+    
+    def get_folder_label(self, index):
+        """
+        Args:
+            index (int): Index of image
+        Returns:
+            label of folder (string)
+        """
+        return self.folder_labels[index]
+    
     def __len__(self):
         return len(self.imgs)
-
-    def init_concept_matrix(self):
-        fname = "AllTags81.txt"
-
-        with open(fname) as f:
-            content = f.readlines()
-
-        fname = "Concepts81.txt"
-
-        with open(fname) as f:
-            idx_to_concept = f.readlines()
-
-        for idx, line in enumerate(idx_to_concept):
-            idx_to_concept[idx] = line.split('\n')[0]
-
-        n = len(content)
-        self.concept_list = [None] * n
-
-        for idx, line in enumerate(content):
-            concepts = []
-            for count, indicator in enumerate(line.split(' ')):
-                if indicator != '\n' and int(indicator) == 1:
-                    concepts.append(idx_to_concept[count])
-            concept_list[idx] = concepts
-
-
-    def init_tag_matrix(self):
-        fname = "All_Tags.txt"
-
-        with open(fname) as f:
-            content = f.readlines()
-
-        n = len(content)
-        self.tag_list = [None] * n
-
-        for line, idx in zip(content, range(n)):
-            self.tag_list[idx] = line.split(' ')[1:]
-
-    def init_relevancy_matrix(self):
-        fname = "nuswide_metadata/AllTags81.txt"
-
-        with open(fname) as f:
-            content = f.readlines()
-
-        n = len(content)
-        self.relevancy_matrix = np.zeros((n,81), dtype=int)
-
-        for line, idx in zip(content, range(n)):
-            self.relevancy_matrix[idx,:] = np.array([int(c) for c in line.split(' ') if c is not '\n'])
-
 
 
 # Dataset used for nearest neighbors loading
