@@ -21,13 +21,13 @@ def fit(train_loader, val_loader, dataset, model, loss_fn, optimizer, scheduler,
         scheduler.step()
 
         # Train stage
-        train_loss, metrics = train_epoch(train_loader, dataset, model, loss_fn, optimizer, cuda, log_interval, metrics, word_vect_dict, word_vect_values)
+        train_loss, metrics = pass_epoch(train_loader, dataset, model, loss_fn, optimizer, cuda, log_interval, metrics, word_vect_dict, word_vect_values)
 
         message = 'Epoch: {}/{}. Train set: Average loss: {:.4f}'.format(epoch + 1, n_epochs, train_loss)
         for metric in metrics:
             message += '\t{}: {}'.format(metric.name(), metric.value())
 
-        val_loss, metrics = test_epoch(val_loader, dataset, model, loss_fn, cuda, metrics, word_vect_dict, word_vect_values)
+        val_loss, metrics = pass_epoch(val_loader, dataset, model, loss_fn, optimizer, cuda, log_interval, metrics,  word_vect_dict, word_vect_values, train=False)
         val_loss /= len(val_loader)
 
         message += '\nEpoch: {}/{}. Validation set: Average loss: {:.4f}'.format(epoch + 1, n_epochs,
@@ -37,16 +37,19 @@ def fit(train_loader, val_loader, dataset, model, loss_fn, optimizer, scheduler,
 
         print(message)
 
-
-def train_epoch(train_loader, dataset, model, loss_fn, optimizer, cuda, log_interval, metrics, word_vect_dict, word_vect_values):
+def pass_epoch(loader, dataset, model, loss_fn, optimizer, cuda, log_interval, metrics, word_vect_dict, word_vect_values, train=True):
     for metric in metrics:
         metric.reset()
 
-    model.train()
-    losses = []
+    if train:
+        model.train()
+        losses = []
+    else:
+        model.eval()
+
     total_loss = 0
 
-    for batch_idx, (indices, data, target) in enumerate(train_loader):
+    for batch_idx, (indices, data, target) in enumerate(loader):
         target = target if len(target) > 0 else None
 
         labels_set = set(target.numpy())
@@ -59,19 +62,19 @@ def train_epoch(train_loader, dataset, model, loss_fn, optimizer, cuda, log_inte
         for idx in range(len(target)):
             ds_idx = indices[idx] # index of image in dataset (dataset index)
             img = data[idx]       # image data (pre-extracted feature)
-            label = target[idx]   # label (folder label in nuswide)                      
+            label = target[idx]   # label (folder label in nuswide)
             b_idx = idx           # index of image in batch   (batch index)
 
             #--- setting anchors ---
             # -image anchor-
             a_img = img
-            
+
             # -text anchor-
             # sometimes an image has no associated concepts
-            if dataset.get_concepts(ds_idx):   
+            if dataset.get_concepts(ds_idx):
                 #try:    # tests to see if there is a word embedding for the concept
                     concept_vec = random.choice(dataset.get_concepts(ds_idx))
-                    a_txt = word_vect_dict[concept_vec] 
+                    a_txt = word_vect_dict[concept_vec]
                 #except: # use folder label as a backup
                     #print(concept_vec)
                     #a_txt = word_vect_dict[text_labels[label.item()]]
@@ -87,7 +90,7 @@ def train_epoch(train_loader, dataset, model, loss_fn, optimizer, cuda, log_inte
 
             # ---setting negative word vector---
             n_txt = word_vect_dict[random.choice(dataset.get_negative_concepts(ds_idx))]
-    
+
             # ---setting positive image---
             positive_index = b_idx
             if len(label_to_indices[label.item()]) > 1:
@@ -132,27 +135,28 @@ def train_epoch(train_loader, dataset, model, loss_fn, optimizer, cuda, log_inte
 
         loss_outputs = loss_fn(*loss_inputs)
         loss = loss_outputs[0] if type(loss_outputs) in (tuple, list) else loss_outputs
-        losses.append(loss.item())
         total_loss += loss.item()
-        loss.backward()
-        optimizer.step()
+        if train:
+            losses.append(loss.item())
+            loss.backward()
+            optimizer.step()
 
         for metric in metrics:
             metric(outputs, target, loss_outputs)
 
-        if batch_idx % log_interval == 0:
+        if batch_idx % log_interval == 0 and train:
             message = 'Train: [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                batch_idx * len(data[0]), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), np.mean(losses))
+                batch_idx * len(data[0]), len(loader.dataset),
+                100. * batch_idx / len(loader), np.mean(losses))
             for metric in metrics:
                 message += '\t{}: {}'.format(metric.name(), metric.value())
 
             print(message)
             losses = []
 
-    total_loss /= (batch_idx + 1)
+    if train:
+        total_loss /= (batch_idx + 1)
     return total_loss, metrics
-
 
 
 def test_epoch(val_loader, dataset, model, loss_fn, cuda, metrics, word_vect_dict, word_vect_values):
