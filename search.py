@@ -24,6 +24,121 @@ class EmbeddingModel():
     def get_embedding(self, tensor):
         return self.net.get_embedding(tensor)
 
+class Dataset():
+    '''
+    Wrapper class around a dataset
+    '''
+    def __init__(self, data, name, modality, dimension):
+        self.data = data
+        self.name = name
+        self.modality = modality
+        self.dimension = dimension
+
+    def create_loader(self, model, binarized, threshold, save_directory, load_embeddings, batch_size, cuda):
+        '''
+        Just sanity checks before fitting data. Moved this here for cleaer code
+        
+        Called by SearchEngine.fit()
+        
+        Parameters:
+        data (iterable): Some iterable that has interations of (batch index, batch embeddings)
+        save_embeddings (bool): If True, write each batch into a file (overwrites)
+        load_embeddings (bool): If True, load embeddings from self.save_directory
+        
+        Returns:
+        iterable: Loader that yields baches
+        '''
+        if load_embeddings:
+            directory = "{}/{}/{}".format(save_directory, self.name, model.name)
+            loader = self.load_embeddings(directory, model, binarized)
+        else:
+            loader = self.featurize_data(model, binarized, 0, cuda)
+        return loader
+    
+    def save_batch(self, batch, filename, binarized, save_directory):
+        '''
+        Saves batch into a filename into .npy file
+        Does bitpacking if batches are binarized to drastically reduce size of files
+        
+        Called by SearchEngine.fit(save_embeddings = True)
+        
+        Parameters:
+        batch (arraylike): Batch to save
+        filename (string): Path to save batch to
+        
+        Returns:
+        None
+        '''
+        
+        path = "{}/{}.npy".format(save_directory, filename)
+        if binarized:
+            np.save(path, np.packbits(batch.astype(bool)))
+        else:
+            np.save(path, batch.astype('float32'))
+                
+    def load_batch(self, filename, model, binarized):
+        '''
+        Load batch from a filename
+        
+        Called by SearchEngine.load_embeddings()
+        
+        Parameters:
+        filename (string): Path to batch, which should be a .npy file
+        
+        Returns:
+        arraylike: loaded batch
+        '''
+        if binarized:
+            batch = np.unpackbits(np.load(filename)).astype('float32')
+            dims, rows = model.output_dimension, len(batch) // model.output_dimension
+            batch = batch.reshape(rows, dims)
+        else:
+            batch = np.load(filename).astype('float32')
+        return batch
+    
+    def load_embeddings(self, directory, model, binarized):
+        '''
+        Loads previously saved embeddings from save_directory
+        
+        Called by SearchEngine.fit(load_embeddings = True)
+        
+        Parameters:
+        
+        
+        Yields:
+        int: Batch index
+        arraylike: Embeddings received from passing data through net
+        '''
+        filenames = sorted(["{}/{}".format(directory, filename) for filename in os.listdir(directory) if filename[-3:] == "npy"])
+        for batch_idx in range(len(filenames)):
+            embeddings = self.load_batch(filenames[batch_idx], model, binarized)
+            yield batch_idx, embeddings
+    
+    def featurize_data(self, data, model, binarized, offset, cuda):
+        '''
+        Generator function that yields embeddings of data in batches
+        
+        Called by fit(load_embeddings = False)
+        
+        Parameters:
+        data (arraylike): Data to featurize
+        
+        Yields:
+        int: Batch index
+        arraylike: Embeddings received from passing data through net
+        '''
+        for batch_idx, (data, target) in enumerate(data):
+            if batch_idx >= offset:
+                if not type(data) in (tuple, list):
+                    data = (data,)
+                if cuda:
+                    data = tuple(d.cuda() for d in data)
+                embeddings = model.get_embedding(*data)
+                if binarized:
+                    embeddings = binarize(embeddings.detach(), threshold=self.threshold)
+                yield batch_idx, embeddings.cpu().detach().numpy()
+
+
 class SearchEngine():
     '''
     Search Engine Class
@@ -195,112 +310,7 @@ class SearchEngine():
         if self.verbose:
             time_elapsed = time.time() - start_time
             print("Finished building {} index in {} seconds.".format(model.name, round(time_elapsed, 4)))
-        
-    def save_batch(self, batch, filename, binarized):
-        '''
-        Saves batch into a filename into .npy file
-        Does bitpacking if batches are binarized to drastically reduce size of files
-        
-        Called by SearchEngine.fit(save_embeddings = True)
-        
-        Parameters:
-        batch (arraylike): Batch to save
-        filename (string): Path to save batch to
-        
-        Returns:
-        None
-        '''
-        
-        path = "{}/{}.npy".format(self.save_directory, filename)
-        if binarized:
-            np.save(path, np.packbits(batch.astype(bool)))
-        else:
-            np.save(path, batch.astype('float32'))
-                
-    def load_batch(self, filename, model, binarized):
-        '''
-        Load batch from a filename
-        
-        Called by SearchEngine.load_embeddings()
-        
-        Parameters:
-        filename (string): Path to batch, which should be a .npy file
-        
-        Returns:
-        arraylike: loaded batch
-        '''
-        if binarized:
-            batch = np.unpackbits(np.load(filename)).astype('float32')
-            dims, rows = model.output_dimension, len(batch) // model.output_dimension
-            batch = batch.reshape(rows, dims)
-        else:
-            batch = np.load(filename).astype('float32')
-        return batch
-    
-    def load_embeddings(self, directory, model, binarized):
-        '''
-        Loads previously saved embeddings from save_directory
-        
-        Called by SearchEngine.fit(load_embeddings = True)
-        
-        Parameters:
-        
-        
-        Yields:
-        int: Batch index
-        arraylike: Embeddings received from passing data through net
-        '''
-        filenames = sorted(["{}/{}".format(directory, filename) for filename in os.listdir(directory) if filename[-3:] == "npy"])
-        for batch_idx in range(len(filenames)):
-            embeddings = self.load_batch(filenames[batch_idx], model, binarized)
-            yield batch_idx, embeddings
-    
-    def featurize_data(self, data, model, binarized, offset):
-        '''
-        Generator function that yields embeddings of data in batches
-        
-        Called by fit(load_embeddings = False)
-        
-        Parameters:
-        data (arraylike): Data to featurize
-        
-        Yields:
-        int: Batch index
-        arraylike: Embeddings received from passing data through net
-        '''
-        for batch_idx, (data, target) in enumerate(data):
-            if batch_idx >= offset:
-                if not type(data) in (tuple, list):
-                    data = (data,)
-                if self.cuda:
-                    data = tuple(d.cuda() for d in data)
-                embeddings = model.get_embedding(*data)
-                if binarized:
-                    embeddings = binarize(embeddings.detach(), threshold=self.threshold)
-                yield batch_idx, embeddings.cpu().detach().numpy()
      
-
-    def create_loader(self, dataset, model, binarized, threshold, load_embeddings):
-        '''
-        Just sanity checks before fitting data. Moved this here for cleaer code
-        
-        Called by SearchEngine.fit()
-        
-        Parameters:
-        data (iterable): Some iterable that has interations of (batch index, batch embeddings)
-        save_embeddings (bool): If True, write each batch into a file (overwrites)
-        load_embeddings (bool): If True, load embeddings from self.save_directory
-        
-        Returns:
-        iterable: Loader that yields baches
-        '''
-        if load_embeddings:
-            directory = "{}/{}/{}".format(self.save_directory, dataset['name'], model.name)
-            loader = self.load_embeddings(directory, model, binarized)
-        else:
-            data = dataset['data']
-            loader = self.featurize_data(data, model, binarized, 0)
-        return loader
 
     def __repr__(self):
         '''
