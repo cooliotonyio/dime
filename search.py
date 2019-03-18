@@ -114,7 +114,7 @@ class Dataset():
             embeddings = self.load_batch(filenames[batch_idx], model, binarized)
             yield batch_idx, embeddings
     
-    def featurize_data(self, data, model, binarized, offset, cuda):
+    def featurize_data(self, model, binarized, offset, cuda):
         '''
         Generator function that yields embeddings of data in batches
         
@@ -127,7 +127,7 @@ class Dataset():
         int: Batch index
         arraylike: Embeddings received from passing data through net
         '''
-        for batch_idx, (data, target) in enumerate(data):
+        for batch_idx, (data, target) in enumerate(self.data):
             if batch_idx >= offset:
                 if not type(data) in (tuple, list):
                     data = (data,)
@@ -191,8 +191,9 @@ class SearchEngine():
 
         for modality in modalities:
             self.modalities[modality] = {
-                'models': []
-                'indexes': []
+                'models': [],
+                'indexes': [],
+                'datasets': []
             }
 
     def search(self, embeddings, n=5, verbose=False):
@@ -240,15 +241,15 @@ class SearchEngine():
     def add_dataset(self, dataset_name, data, modality, dimension):
         assert (dataset_name not in self.datasets), "Dataset with dataset_name already in self.datasets"
         assert (modality in self.modalities), "Modality not supported by SearchEngine"
-        dataset = {
-            'name': dataset_name,
-            'data': data,
-            'modality': modality
-            'dimension': dimension
-        }
+        dataset = Dataset(
+            name =  dataset_name,
+            data = data,
+            modality = modality,
+            dimension = dimension)
         self.datasets[dataset_name] = dataset
-          
-    def build_index(self, dataset_name, models = None, binarized = False, threshold = 0, load_embeddings = True, save_embeddings = True, step_size = 1000):
+        self.modalities[dataset.modality]['datasets'].append(dataset.name)
+
+    def build_index(self, dataset_name, models = None, binarized = False, threshold = 0, load_embeddings = True, save_embeddings = True, batch_size = 128, step_size = 1000):
 
         dataset = self.datasets[dataset_name]
 
@@ -256,25 +257,27 @@ class SearchEngine():
             raise Exception("save_directory not specified")
 
         if models is None:
-            models = self.modalities[modality]['models']
-
+            models = self.modalities[dataset.modality]['models']
+        
+        models = [self.models[model] for model in models]
+        
         for model in models:
-            assert dataset['modality'] == model.modality, "Model modality does not match dataset modality"
-            assert model.input_dimension == dataset['dimension'], "Model input dimension does not match dimension of dataset"
-
-            data_loader = create_loader(dataset, model, binarized, threshold, load_embeddings)
+            assert dataset.modality == model.modality, "Model modality does not match dataset modality"
+            assert model.input_dimension == dataset.dimension, "Model input dimension does not match dimension of dataset"
+           
             index = faiss.IndexFlatL2(model.output_dimension)
 
             key = (model.name, dataset_name, binarized)
 
             self.indexes[key] = index
             self.modalities[dataset.modality]['indexes'].append(key)
+            self.modalities[dataset.modality]['indexes'] = list(set(self.modalities[dataset.modality]['indexes']))
 
             #TODO: Cuda() index
 
-            self.fit(index, model, data_loader, dataset_name, save_embeddings, step_size)
+            self.fit(index, model, dataset,binarized, threshold, load_embeddings, save_embeddings, batch_size, step_size)
 
-    def fit(self, index, model, data_loader, dataset_name, save_embeddings, step_size):
+    def fit(self, index, model, dataset,binarized, threshold, load_embeddings, save_embeddings, batch_size, step_size):
         '''
         1) Featurize (and optionally binarize) data into embeddings OR load embeddings without data
         2) Optionally save embeddings
@@ -292,27 +295,29 @@ class SearchEngine():
         Returns:
         None
         '''
-        if self.verbose
+        if self.verbose:
             start_time = time.time()
             print("Building {} index".format(model.name))
-
-        num_batches = len(data_loader)
+            
+        data_loader = dataset.create_loader(model, binarized, threshold, self.save_directory, load_embeddings, batch_size, self.cuda)
+        
+        #TODO: fix num_batches
+        num_batches = 10000
         batch_magnitude = len(str(num_batches))
 
         for batch_idx, embeddings in data_loader:
             if self.verbose and not (batch_idx % step_size):
                 print("Batch {} of {}".format(batch_idx, num_batches))
             if save_embeddings:
-                filename = "{}/{}/batch_{}".format(dataset_name, model.name, str(batch_idx).zfill(batch_magnitude))
-                self.save_batch(embeddings, filename, binarized)
+                filename = "{}/{}/batch_{}".format(dataset.name, model.name, str(batch_idx).zfill(batch_magnitude))
+                dataset.save_batch(embeddings, filename, binarized, self.save_directory)
             index.add(embeddings)
         
         if self.verbose:
             time_elapsed = time.time() - start_time
             print("Finished building {} index in {} seconds.".format(model.name, round(time_elapsed, 4)))
      
-
     def __repr__(self):
         '''
         '''
-        return "SearchEngine<{} modalities, {} models, {} datasets>".format(len(self.modalities), len(self.models), len(self.datasets))
+        return "SearchEngine<{} modalities, {} models, {} datasets, {} indexes>".format(len(self.modalities), len(self.models), len(self.datasets), len(self.indexes))
