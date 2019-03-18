@@ -195,8 +195,31 @@ class SearchEngine():
                 'indexes': [],
                 'datasets': []
             }
-
-    def search(self, embeddings, n=5, verbose=False):
+            
+    def valid_models(self, tensor, modality):
+        valid_models = []
+        for model in list(self.models.values()):
+            if modal.modality == modality and model.input_dimension == tensor.shape:
+                valid_models.append(model.name)
+        return valid_models
+    
+    def valid_indexes(self, embedding):
+        valid_indexes_keys = []
+        for key in self.indexes:
+            dataset_name, model_name, binarized = key
+            if self.models[model_name].output_dimension == embedding.shape:
+                valid_indexes_keys.append(key)
+         return valid_indexes_keys
+        
+    def get_embedding(self, tensor, model_name, binarized = False, threshold = 0):
+        assert model_name in self.models, "Model not found"
+        model = self.models[model_name]
+        embedding = model.get_embedding(tensor)
+        if binarized:
+            embedding = binarize(embedding)
+        return embedding
+            
+    def search(self, embeddings, index_key, n=5):
         '''
         Searches index for nearest n neighbors for each embedding in embeddings
         
@@ -211,16 +234,8 @@ class SearchEngine():
         list: List of lists of distances of neighbors
         list: List of lists of indexes of neighbors
         '''
-        # TODO: Fix
-        start_time = time.time()
-        distances, idxs = self.index.search(embeddings, n)
-        elapsed_time = time.time() - start_time
-            
-        if verbose:
-            print("Median distance: {}".format(np.median(distances)))
-            print("Mean distance: {}".format(np.mean(distances)))
-            print("Time elapsed: {}".format(round(elapsed_time, 5)))
-            
+        assert key in self.indexes, "Index key not recognized"
+        distances, idxs = index.search(embeddings, n)
         return distances, idxs
     
     def add_model(self, net, name, modality, input_dimension, output_dimension):
@@ -264,10 +279,8 @@ class SearchEngine():
         for model in models:
             assert dataset.modality == model.modality, "Model modality does not match dataset modality"
             assert model.input_dimension == dataset.dimension, "Model input dimension does not match dimension of dataset"
-           
             index = faiss.IndexFlatL2(model.output_dimension)
-
-            key = (model.name, dataset_name, binarized)
+            key = (dataset_name, model.name, binarized)
 
             self.indexes[key] = index
             self.modalities[dataset.modality]['indexes'].append(key)
