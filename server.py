@@ -13,6 +13,7 @@ WORD2VEC = pickle.load(open("pickles/word_embeddings/word_embeddings_tensors.p",
 
 def init_engine(app):
     # Build Networks
+    print("Building networks...")
     import pickle
     text_net = pickle.load(open("pickles/models/entire_nuswide_model.p", "rb"))
     def get_text_embedding(*data):
@@ -21,6 +22,7 @@ def init_engine(app):
     image_net = pickle.load(open("pickles/models/entire_nuswide_model.p", "rb"))
 
     # Build Datasets
+    print("Building datasets...")
     from torchvision.datasets import ImageFolder
     from torchvision import transforms
     image_directory = 'data/Flickr'
@@ -38,6 +40,7 @@ def init_engine(app):
         text_data[idx] = (value, idx)
 
     # Build DataLoaders
+    print("Building dataloaders...")
     from torch.cuda import is_available
     batch_size = 128
     cuda = is_available()
@@ -47,6 +50,7 @@ def init_engine(app):
     text_dataloader = DataLoader(text_data, batch_size = batch_size, **kwargs)
 
     #Building SearchEngine
+    print("Building search engine")
     from search import SearchEngine
     save_directory = './embeddings'
     search_engine = SearchEngine(["text", "image"], cuda = cuda, save_directory = save_directory, verbose = True)
@@ -56,6 +60,7 @@ def init_engine(app):
     search_engine.add_dataset("nus-wide", image_dataloader, image_from_idx, "image", (3, 244, 244))
 
     #Build Indexes
+    print("Building Indexes")
     search_engine.build_index("wiki_word2vec")
     search_engine.build_index("nus-wide")
 
