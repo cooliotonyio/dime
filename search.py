@@ -28,8 +28,9 @@ class Dataset():
     '''
     Wrapper class around a dataset
     '''
-    def __init__(self, data, name, modality, dimension):
+    def __init__(self, data_loader,data, name, modality, dimension):
         self.data = data
+        self.data_loader = data_loader
         self.name = name
         self.modality = modality
         self.dimension = dimension
@@ -127,7 +128,7 @@ class Dataset():
         int: Batch index
         arraylike: Embeddings received from passing data through net
         '''
-        for batch_idx, (data, target) in enumerate(self.data):
+        for batch_idx, (data, target) in enumerate(self.data_loader):
             if batch_idx >= offset:
                 if not type(data) in (tuple, list):
                     data = (data,)
@@ -137,7 +138,6 @@ class Dataset():
                 if binarized:
                     embeddings = binarize(embeddings.detach(), threshold=self.threshold)
                 yield batch_idx, embeddings.cpu().detach().numpy()
-
 
 class SearchEngine():
     '''
@@ -253,11 +253,12 @@ class SearchEngine():
             model = self.models[key]
             print("{} \t {} \t {}".format(i, model.name, model.modality))
 
-    def add_dataset(self, dataset_name, data, modality, dimension):
+    def add_dataset(self, dataset_name, data_loader, data, modality, dimension):
         assert (dataset_name not in self.datasets), "Dataset with dataset_name already in self.datasets"
         assert (modality in self.modalities), "Modality not supported by SearchEngine"
         dataset = Dataset(
             name =  dataset_name,
+            data_loader = data_loader,
             data = data,
             modality = modality,
             dimension = dimension)
