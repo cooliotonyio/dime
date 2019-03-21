@@ -130,8 +130,9 @@ def query(modality):
             return "audio"
     return redirect(url_for('home'))
 
-# if __name__ == "__main__":
-#     app.run()
-
-
-init_engine(app)
+if __name__ == "__main__":
+    init_engine(app)
+    app.run(
+        host=os.getenv('LISTEN', '0.0.0.0'),
+        port=int(os.getenv('PORT', '80'))
+    )
