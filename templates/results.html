@@ -1,0 +1,54 @@
+{% extends "_template.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-8 text-center">
+        <h1 class="pt-5">Query:</h1>
+    </div>
+</div>
+<div class="row justify-content-center">
+        <div class="col-4 text-center">
+            <h4>Modality:</h4> {{modality}}
+        </div>
+        <div class="col-4 text-center">
+            <h4>Input:</h4>
+            {% if modality == "text" %}
+                {{input}}
+            {% endif %}
+            {% if modality == "image" %}
+                <img class="w-100" src="/{{input}}">
+            {% endif %}
+        </div>
+    </div>
+
+
+<div class="row justify-content-center">
+    <div class="col-8 text-center">
+        <h1 class="pt-5">Results:</h1>
+
+        <ul class="nav nav-tabs nav-justified" id="myTab" role="tablist">
+            <li class="nav-item">
+                <a class="nav-link active" id="text-tab" data-toggle="tab" href="#text" role="tab" aria-controls="text" aria-selected="true">Text</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="image-tab" data-toggle="tab" href="#image" role="tab" aria-controls="image" aria-selected="false">Image</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="audio-tab" data-toggle="tab" href="#audio" role="tab" aria-controls="audio" aria-selected="false">Audio</a>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="myTabContent">
+            <div class="tab-pane fade show active" id="text" role="tabpanel" aria-labelledby="text-tab">
+
+            </div>
+            <div class="tab-pane fade" id="image" role="tabpanel" aria-labelledby="image-tab">
+                
+            </div>
+            <div class="tab-pane fade" id="audio" role="tabpanel" aria-labelledby="audio-tab">
+
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
