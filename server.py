@@ -97,6 +97,7 @@ def search(target, modality):
                 distances: d,
                 indicies: i
             }
+    return results
             
 
 @app.route('/')
@@ -117,7 +118,7 @@ def query(modality):
     if request.method == "POST":
         if modality == "text":
             results = search(request.args["text"], "text")
-            print(result)
+            print(results)
             return render_template('results.html', modality = modality, input = text)
         elif modality == "image":
             if 'file' in request.files:

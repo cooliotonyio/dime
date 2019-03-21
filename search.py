@@ -209,7 +209,7 @@ class SearchEngine():
             dataset_name, model_name, binarized = key
             if self.models[model_name].output_dimension == embedding.shape:
                 valid_indexes_keys.append(key)
-         return valid_indexes_keys
+        return valid_indexes_keys
         
     def get_embedding(self, tensor, model_name, binarized = False, threshold = 0):
         assert model_name in self.models, "Model not found"
