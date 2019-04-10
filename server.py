@@ -5,13 +5,7 @@ import os
 
 app = Flask(__name__)
 
-EMBEDDING_DIR = ""
-UPLOAD_DIR = "./uploads"
-DATA_DIR = "./data"
-ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif'])
-WORD2VEC = pickle.load(open("pickles/word_embeddings/word_embeddings_tensors.p", "rb"))
-
-def init_engine(app):
+def init_engine():
     # Build Networks
     print("Building networks...")
     import pickle
@@ -65,38 +59,31 @@ def init_engine(app):
     search_engine.build_index("nus-wide")
 
     #Finished
-    app.config['ENGINE'] = search_engine
+    return search_engine
 
-def image_to_tensor(filename):
+def target_to_tensor(target, modality):
     image_transform = transforms.Compose([
             transforms.Resize((224,224)),
             transforms.ToTensor(),
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
-    image = PIL.Image.open(filename).convert('RGB')
-    tensor = image_transform(image)[None,:,:,:]
+    if modality == "image":
+        tensor = image_transform(target)
+    elif modality == "text":
+        tensor = word2vec_dict[target]
     return tensor
-
-def text_to_tensor(text):
-    return WORD2VEC[text]
 
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def search(target, modality):
-    results = {}
-    if modality == "text":
-        text = target
-        tensor = text_to_tensor(text)
-        model_name = search_engine.valid_models(tensor, "text")[0]
-        embedding = search_engine.get_embedding(tensor, model_name)
-        indexes_keys = search_engine.valid_indexes(embedding)
-        for key in indexes_keys:
-            d, i = search_engine.search(embedding, key)
-            resultes[key] = {
-                distances: d,
-                indicies: i
-            }
+def search(target, modality, n=5):
+    tensor = target_to_tensor(target, modality).detach().to("cuda")
+    model_name = search_engine.valid_models(tensor, modality)[0]
+    embedding = search_engine.models[model_name].get_embedding(tensor[None,:,:,:])[0]
+    results = []
+    for index_key in search_engine.valid_indexes(embedding):
+        dis, idx = search_engine.search(embedding, index_key, n = n)
+        results.append([[index_key, dis, idx]])
     return results
             
 
@@ -114,12 +101,13 @@ def data(filename):
 
 @app.route('/query/<modality>', methods=['GET', 'POST'])
 def query(modality):
-    search_engine = app.config["ENGINE"]
     if request.method == "POST":
         if modality == "text":
-            results = search(request.args["text"], "text")
-            print(results)
-            return render_template('results.html', modality = modality, input = text)
+            text = request.form["text"]
+            if text in WORD2VEC:
+                results = search(text, "text")
+                print(results)
+                return render_template('results.html', modality = modality, input = text)
         elif modality == "image":
             if 'file' in request.files:
                 f = request.files['file']
@@ -131,8 +119,14 @@ def query(modality):
             return "audio"
     return redirect(url_for('home'))
 
+
+EMBEDDING_DIR = ""
+UPLOAD_DIR = "./uploads"
+DATA_DIR = "./data"
+ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif'])
+WORD2VEC = pickle.load(open("pickles/word_embeddings/word_embeddings_tensors.p", "rb"))
+search_engine = init_engine()
 if __name__ == "__main__":
-    init_engine(app)
     app.run(
         host=os.getenv('LISTEN', '0.0.0.0'),
         port=int(os.getenv('PORT', '80'))

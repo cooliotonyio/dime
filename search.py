@@ -199,7 +199,7 @@ class SearchEngine():
     def valid_models(self, tensor, modality):
         valid_models = []
         for model in list(self.models.values()):
-            if modal.modality == modality and model.input_dimension == tensor.shape:
+            if model.modality == modality and model.input_dimension == tuple(tensor.shape):
                 valid_models.append(model.name)
         return valid_models
     
@@ -207,7 +207,7 @@ class SearchEngine():
         valid_indexes_keys = []
         for key in self.indexes:
             dataset_name, model_name, binarized = key
-            if self.models[model_name].output_dimension == embedding.shape:
+            if self.models[model_name].output_dimension == tuple(embedding.shape)[0]:
                 valid_indexes_keys.append(key)
         return valid_indexes_keys
         
@@ -234,7 +234,11 @@ class SearchEngine():
         list: List of lists of distances of neighbors
         list: List of lists of indexes of neighbors
         '''
-        assert key in self.indexes, "Index key not recognized"
+        assert index_key in self.indexes, "Index key not recognized"
+        index = self.indexes[index_key]
+        if len(embeddings.shape) == 1:
+            embeddings = embeddings[None,:]
+        embeddings = embeddings.cpu().detach().numpy()
         distances, idxs = index.search(embeddings, n)
         return distances, idxs
     
@@ -330,6 +334,10 @@ class SearchEngine():
         if self.verbose:
             time_elapsed = time.time() - start_time
             print("Finished building {} index in {} seconds.".format(model.name, round(time_elapsed, 4)))
+            
+    def data_from_idx(self, dataset_name, indicies):
+        dataset = self.datasets[dataset_name]
+        return [dataset.data[i] for i in indicies]
      
     def __repr__(self):
         '''
