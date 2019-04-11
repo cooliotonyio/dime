@@ -7,13 +7,144 @@ import time
 from torchvision import transforms
 from sklearn.preprocessing import binarize
 
+class EmbeddingModel():
+    '''
+    Wrapper Class around a neural network
+    '''
+    def __init__(self, net, name, modality, input_dimension, output_dimension, cuda):
+        self.net = net
+        self.name = name
+        self.modality = modality
+        self.input_dimension = input_dimension
+        self.output_dimension = output_dimension
+        self.cuda = cuda
+        if self.cuda:
+            self.net.cuda()
+    
+    def get_embedding(self, tensor):
+        return self.net.get_embedding(tensor)
+
+class Dataset():
+    '''
+    Wrapper class around a dataset
+    '''
+    def __init__(self, data, name, modality, dimension):
+        self.data = data
+        self.name = name
+        self.modality = modality
+        self.dimension = dimension
+
+    def create_loader(self, model, binarized, threshold, save_directory, load_embeddings, batch_size, cuda):
+        '''
+        Just sanity checks before fitting data. Moved this here for cleaer code
+        
+        Called by SearchEngine.fit()
+        
+        Parameters:
+        data (iterable): Some iterable that has interations of (batch index, batch embeddings)
+        save_embeddings (bool): If True, write each batch into a file (overwrites)
+        load_embeddings (bool): If True, load embeddings from self.save_directory
+        
+        Returns:
+        iterable: Loader that yields baches
+        '''
+        if load_embeddings:
+            directory = "{}/{}/{}".format(save_directory, self.name, model.name)
+            loader = self.load_embeddings(directory, model, binarized)
+        else:
+            loader = self.featurize_data(model, binarized, 0, cuda)
+        return loader
+    
+    def save_batch(self, batch, filename, binarized, save_directory):
+        '''
+        Saves batch into a filename into .npy file
+        Does bitpacking if batches are binarized to drastically reduce size of files
+        
+        Called by SearchEngine.fit(save_embeddings = True)
+        
+        Parameters:
+        batch (arraylike): Batch to save
+        filename (string): Path to save batch to
+        
+        Returns:
+        None
+        '''
+        
+        path = "{}/{}.npy".format(save_directory, filename)
+        if binarized:
+            np.save(path, np.packbits(batch.astype(bool)))
+        else:
+            np.save(path, batch.astype('float32'))
+                
+    def load_batch(self, filename, model, binarized):
+        '''
+        Load batch from a filename
+        
+        Called by SearchEngine.load_embeddings()
+        
+        Parameters:
+        filename (string): Path to batch, which should be a .npy file
+        
+        Returns:
+        arraylike: loaded batch
+        '''
+        if binarized:
+            batch = np.unpackbits(np.load(filename)).astype('float32')
+            dims, rows = model.output_dimension, len(batch) // model.output_dimension
+            batch = batch.reshape(rows, dims)
+        else:
+            batch = np.load(filename).astype('float32')
+        return batch
+    
+    def load_embeddings(self, directory, model, binarized):
+        '''
+        Loads previously saved embeddings from save_directory
+        
+        Called by SearchEngine.fit(load_embeddings = True)
+        
+        Parameters:
+        
+        
+        Yields:
+        int: Batch index
+        arraylike: Embeddings received from passing data through net
+        '''
+        filenames = sorted(["{}/{}".format(directory, filename) for filename in os.listdir(directory) if filename[-3:] == "npy"])
+        for batch_idx in range(len(filenames)):
+            embeddings = self.load_batch(filenames[batch_idx], model, binarized)
+            yield batch_idx, embeddings
+    
+    def featurize_data(self, model, binarized, offset, cuda):
+        '''
+        Generator function that yields embeddings of data in batches
+        
+        Called by fit(load_embeddings = False)
+        
+        Parameters:
+        data (arraylike): Data to featurize
+        
+        Yields:
+        int: Batch index
+        arraylike: Embeddings received from passing data through net
+        '''
+        for batch_idx, (data, target) in enumerate(self.data):
+            if batch_idx >= offset:
+                if not type(data) in (tuple, list):
+                    data = (data,)
+                if cuda:
+                    data = tuple(d.cuda() for d in data)
+                embeddings = model.get_embedding(*data)
+                if binarized:
+                    embeddings = binarize(embeddings.detach(), threshold=self.threshold)
+                yield batch_idx, embeddings.cpu().detach().numpy()
+
+
 class SearchEngine():
     '''
     Search Engine Class
     
     Attributes: 
         embedding_net (neural network): Neural network to pass in tensors and receive embeddings
-        embedding_dimension (int): Dimension of embeddings outputted by neural network
         cuda (bool): If True, enables CUDA for featurizing data
         is_binarized (bool): If True, all embeddings are binarized
         threshold (float): Threshold level for binarization
@@ -29,8 +160,8 @@ class SearchEngine():
         search()
         
     '''
-    
-    def __init__(self, embedding_net, embedding_dimension, cuda = None, is_binarized = True, threshold = 0, save_directory = None, embeddings_name = "embeddings"):
+
+    def __init__(self, modalities, cuda = None, save_directory = None, verbose = False):
         '''
         Initializes SearchEngine object
         
@@ -38,7 +169,6 @@ class SearchEngine():
         
         Parameters:
         embedding_net (neural network): Neural network to pass in tensors and receive embeddings
-        embedding_dimension (int): Dimension of embeddings outputted by neural network
         cuda (bool): If True, enables CUDA for featurizing data
         is_binarized (bool): If True, all embeddings are binarized
         threshold (float): Threshold level for binarization
@@ -49,259 +179,47 @@ class SearchEngine():
         SearchEngine: SearchEngine object
         '''
         
-        self.embedding_net = embedding_net
-        self.embedding_dimension = embedding_dimension
         self.cuda = cuda
-        self.is_binarized = is_binarized
-        self.threshold = threshold
         self.save_directory = save_directory
-        self.embeddings_name = embeddings_name
+        self.verbose = verbose
         
         # Initialize index
-        self.index = faiss.IndexFlatL2(embedding_dimension)
+        self.indexes = {}
+        self.models = {}
+        self.datasets = {}
+        self.modalities = {}
 
-        # GPU acceleration of net and index
-        if self.cuda:
-            self.embedding_net.cuda()
-#             res = faiss.StandardGpuResources()
-#             self.index = faiss.index_cpu_to_gpu(res, 0, self.index)
-
-
-    def featurize_data(self, data):
-        '''
-        Generator function that yields embeddings of data in batches
-        Binarizes the embeddings if self.is_binarized
-        
-        Called by fit(load_embeddings = False)
-        
-        Parameters:
-        data (arraylike): Data to featurize
-        
-        Yields:
-        int: Batch index
-        arraylike: Embeddings received from passing data through net
-        '''
-        for batch_idx, (data, target) in enumerate(data):
-            if not type(data) in (tuple, list):
-                data = (data,)
-            if self.cuda:
-                data = tuple(d.cuda() for d in data)
-            embeddings = self.embedding_net.get_embedding(*data)
-            if self.is_binarized:
-                embeddings = binarize(embeddings.detach(), threshold=self.threshold)
-            yield batch_idx, embeddings.cpu().detach().numpy()
-        
-    def update_index(self, embeddings):
-        '''
-        Adds embeddings into index non-destructively
-        
-        Called by SearchEngine.fit()
-        
-        Parameters:
-        embeddings (arraylike): embeddings to add to index
-        
-        Returns:
-        None
-        '''
-        assert self.index.is_trained
-        self.index.add(embeddings)
+        for modality in modalities:
+            self.modalities[modality] = {
+                'models': [],
+                'indexes': [],
+                'datasets': []
+            }
+            
+    def valid_models(self, tensor, modality):
+        valid_models = []
+        for model in list(self.models.values()):
+            if modal.modality == modality and model.input_dimension == tensor.shape:
+                valid_models.append(model.name)
+        return valid_models
     
-    def load_embeddings(self):
-        '''
-        Loads previously saved embeddings from save_directory
+    def valid_indexes(self, embedding):
+        valid_indexes_keys = []
+        for key in self.indexes:
+            dataset_name, model_name, binarized = key
+            if self.models[model_name].output_dimension == embedding.shape:
+                valid_indexes_keys.append(key)
+         return valid_indexes_keys
         
-        Called by SearchEngine.fit(load_embeddings = True)
-        
-        Parameters:
-        None
-        
-        Yields:
-        int: Batch index
-        arraylike: Embeddings received from passing data through net
-        '''
-        filenames = sorted([filename for filename in os.listdir(self.save_directory) if filename[-3:] == "npy"])
-        for batch_idx in range(len(filenames)):
-            embeddings = self.load_batch(filenames[batch_idx])
-            yield batch_idx, embeddings
-            
-    def resolve_loader(self, data, save_embeddings, load_embeddings, verbose, step_size):
-        '''
-        Just sanity checks before fitting data. Moved this here for cleaer code
-        
-        Called by SearchEngine.fit()
-        
-        Parameters:
-        data (iterable): Some iterable that has interations of (batch index, batch embeddings)
-        save_embeddings (bool): If True, write each batch into a file (overwrites)
-        load_embeddings (bool): If True, load embeddings from self.save_directory
-        verbose (bool): If True, prints metadata every step_size
-        step_size (int): Number of batches to process before printing metadata
-        
-        Returns:
-        bool: Whether the parameters satisfy the sanity checks or not
-        string: Reason for failing sanity checks
-        iterable: Loader that yields baches
-        '''
-        if save_embeddings:
-            if not self.save_directory:
-                return False, "save_directory not specified", None
-            else:
-                if not os.path.isdir(self.save_directory):
-                    if input("save_directory does not exist. Create directory? Y/N \n") == "Y":
-                        os.makedirs(self.save_directory)
-                    else:
-                        return False, "Cannot save embeddings", None
-                    
-        if (not load_embeddings) and (not data):
-            return False, "Data not provided", None
-        
-        if load_embeddings:
-            loader = self.load_embeddings()
-        else:
-            loader = self.featurize_data(data)
-        #TODO: enable loading .npy AND data
-        return True, "Sanity checks passed.", loader
-        
-
-    def fit(self, data=None, save_embeddings = False, load_embeddings = False, verbose = False, step_size = 100):
-        '''
-        Main function to
-            1) Featurize (and optionally binarize) data into embeddings OR load embeddings without data
-            2) Optionally save embeddings
-            3) Add embeddings into index
-        
-        Called by User
-            
-        Parameters:
-        data (iterable): Some iterable that has interations of (batch index, batch embeddings)
-        save_embeddings (bool): If True, write each batch into a file (overwrites)
-        load_embeddings (bool): If True, load embeddings from self.save_directory
-        verbose (bool): If True, prints metadata every step_size
-        step_size (int): Number of batches to process before printing metadata
-        
-        Returns:
-        None
-        '''
-        start_time = time.time()
-        
-        passed, message, loader = self.resolve_loader(data, save_embeddings, load_embeddings, verbose, step_size)
-        if not passed:
-            raise Exception("Sanity checks not passed")
-        if verbose:
-            print(message)
-            
-        num_batches = len(data)
-        batch_magnitude = len(str(num_batches))
-
-        for batch_idx, embeddings in loader:
-            if verbose and not (batch_idx % step_size):
-                print("Batch {} of {}".format(batch_idx, num_batches))
-            if save_embeddings:
-                filename = "{}_batch_{}".format(self.embeddings_name, str(batch_idx).zfill(batch_magnitude))
-                self.save_batch(embeddings, filename)
-            self.update_index(embeddings)
-            
-        if verbose:
-            time_elapsed = time.time() - start_time
-            print("Finished building index in {} seconds.".format(round(time_elapsed, 4)))
-        
-    def save_batch(self, batch, filename):
-        '''
-        Saves batch into a filename into .npy file
-        Does bitpacking if batches are binarized to drastically reduce size of files
-        
-        Called by SearchEngine.fit(save_embeddings = True)
-        
-        Parameters:
-        batch (arraylike): Batch to save
-        filename (string): Path to save batch to
-        
-        Returns:
-        None
-        '''
-        path = "{}/{}.npy".format(self.save_directory, filename)
-        if self.is_binarized:
-            np.save(path, np.packbits(batch.astype(bool)))
-        else:
-            np.save(path, batch.astype('float32'))
-                
-    def load_batch(self, filename):
-        '''
-        Load batch from a filename
-        Unpacks bits if self.is_binarized
-        
-        Called by SearchEngine.load_embeddings()
-        
-        Parameters:
-        filename (string): Path to batch, which should be a .npy file
-        
-        Returns:
-        arraylike: loaded batch
-        '''
-        path = "{}/{}".format(self.save_directory, filename)
-        if self.is_binarized:
-            batch = np.unpackbits(np.load(path)).astype('float32')
-            dims, rows = self.embedding_dimension, len(batch) // self.embedding_dimension
-            batch = batch.reshape(rows, dims)
-        else:
-            batch = np.load(path).astype('float32')
-        return batch
-
-    def image_to_tensor(self, image, transform):
-        '''
-        Turns image into a tensor using transform
-        
-        Called by User
-        
-        Parameters:
-        image (PIL.Image): Image to turn into 
-        transform (torchvision.Transform): Transform to perform over image
-        
-        Returns:
-        tensor: The provided image's tensor
-        '''
-        tensor = transform(image)[None,:,:,:]
-        return tensor
-   
-    def text_to_tensor(self, text, tensor_dict):
-        '''
-        Turns text into a tensor using tensor_dict
-        
-        Called by User
-        
-        Parameters:
-        text (string): String to turn into tensor
-        tensor_dict (dict): dictionary to look up text
-        
-        Returns:
-        tensor: The provided string's tensor
-        '''
-        if text not in tensor_dict:
-            raise Exception("Word not in dictionary")
-        return tensor_dict[text]
-
-    def get_embedding(self, data):
-        '''
-        Featurizes data into an embedding
-        
-        Called by User
-        
-        Parameters:
-        data (tensor): Data tensor to featurize
-        
-        Returns:
-        arraylike: Embedding of featurized data
-        '''
-        if not type(data) in (tuple, list):
-            data = (data,)
-        if self.cuda:
-            data = tuple(d.cuda() for d in data)
-        embedding = self.embedding_net.get_embedding(*data).detach()
-        if self.is_binarized:
-            embedding = binarize(embedding, self.threshold)
+    def get_embedding(self, tensor, model_name, binarized = False, threshold = 0):
+        assert model_name in self.models, "Model not found"
+        model = self.models[model_name]
+        embedding = model.get_embedding(tensor)
+        if binarized:
+            embedding = binarize(embedding)
         return embedding
-
-    def search(self, embeddings, n=5, verbose=False):
+            
+    def search(self, embeddings, index_key, n=5):
         '''
         Searches index for nearest n neighbors for each embedding in embeddings
         
@@ -316,14 +234,103 @@ class SearchEngine():
         list: List of lists of distances of neighbors
         list: List of lists of indexes of neighbors
         '''
-        start_time = time.time()
-        distances, idxs = self.index.search(embeddings, n)
-        elapsed_time = time.time() - start_time
-            
-        if verbose:
-            print("Median distance: {}".format(np.median(distances)))
-            print("Mean distance: {}".format(np.mean(distances)))
-            print("Time elapsed: {}".format(round(elapsed_time, 5)))
-            
+        assert key in self.indexes, "Index key not recognized"
+        distances, idxs = index.search(embeddings, n)
         return distances, idxs
     
+    def add_model(self, net, name, modality, input_dimension, output_dimension):
+
+        assert (name not in self.models), "Model with given name already in self.models"
+        assert (modality in self.modalities), "Modality not supported by SearchEngine"
+
+        model = EmbeddingModel(net, name, modality, input_dimension, output_dimension, self.cuda)
+        self.models[name] = model
+        self.modalities[modality]['models'].append(name)
+
+    def print_models(self):
+        print("{} \t {} \t {}".format("Index", "Model Name", "Modality"))
+        for i, key in enumerate(self.models):
+            model = self.models[key]
+            print("{} \t {} \t {}".format(i, model.name, model.modality))
+
+    def add_dataset(self, dataset_name, data, modality, dimension):
+        assert (dataset_name not in self.datasets), "Dataset with dataset_name already in self.datasets"
+        assert (modality in self.modalities), "Modality not supported by SearchEngine"
+        dataset = Dataset(
+            name =  dataset_name,
+            data = data,
+            modality = modality,
+            dimension = dimension)
+        self.datasets[dataset_name] = dataset
+        self.modalities[dataset.modality]['datasets'].append(dataset.name)
+
+    def build_index(self, dataset_name, models = None, binarized = False, threshold = 0, load_embeddings = True, save_embeddings = True, batch_size = 128, step_size = 1000):
+
+        dataset = self.datasets[dataset_name]
+
+        if save_embeddings and not self.save_directory:
+            raise Exception("save_directory not specified")
+
+        if models is None:
+            models = self.modalities[dataset.modality]['models']
+        
+        models = [self.models[model] for model in models]
+        
+        for model in models:
+            assert dataset.modality == model.modality, "Model modality does not match dataset modality"
+            assert model.input_dimension == dataset.dimension, "Model input dimension does not match dimension of dataset"
+            index = faiss.IndexFlatL2(model.output_dimension)
+            key = (dataset_name, model.name, binarized)
+
+            self.indexes[key] = index
+            self.modalities[dataset.modality]['indexes'].append(key)
+            self.modalities[dataset.modality]['indexes'] = list(set(self.modalities[dataset.modality]['indexes']))
+
+            #TODO: Cuda() index
+
+            self.fit(index, model, dataset,binarized, threshold, load_embeddings, save_embeddings, batch_size, step_size)
+
+    def fit(self, index, model, dataset,binarized, threshold, load_embeddings, save_embeddings, batch_size, step_size):
+        '''
+        1) Featurize (and optionally binarize) data into embeddings OR load embeddings without data
+        2) Optionally save embeddings
+        3) Add embeddings into index
+        
+        Called by build_index
+            
+        Parameters:
+        data (iterable): Some iterable that has interations of (batch index, batch embeddings)
+        save_embeddings (bool): If True, write each batch into a file (overwrites)
+        load_embeddings (bool): If True, load embeddings from self.save_directory
+        verbose (bool): If True, prints metadata every step_size
+        step_size (int): Number of batches to process before printing metadata
+        
+        Returns:
+        None
+        '''
+        if self.verbose:
+            start_time = time.time()
+            print("Building {} index".format(model.name))
+            
+        data_loader = dataset.create_loader(model, binarized, threshold, self.save_directory, load_embeddings, batch_size, self.cuda)
+        
+        #TODO: fix num_batches
+        num_batches = 10000
+        batch_magnitude = len(str(num_batches))
+
+        for batch_idx, embeddings in data_loader:
+            if self.verbose and not (batch_idx % step_size):
+                print("Batch {} of {}".format(batch_idx, num_batches))
+            if save_embeddings:
+                filename = "{}/{}/batch_{}".format(dataset.name, model.name, str(batch_idx).zfill(batch_magnitude))
+                dataset.save_batch(embeddings, filename, binarized, self.save_directory)
+            index.add(embeddings)
+        
+        if self.verbose:
+            time_elapsed = time.time() - start_time
+            print("Finished building {} index in {} seconds.".format(model.name, round(time_elapsed, 4)))
+     
+    def __repr__(self):
+        '''
+        '''
+        return "SearchEngine<{} modalities, {} models, {} datasets, {} indexes>".format(len(self.modalities), len(self.models), len(self.datasets), len(self.indexes))
