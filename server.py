@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory
+from flask import Flask, request, redirect, url_for, send_from_directory, jsonify
 from werkzeug.utils import secure_filename
 import pickle
 import os
@@ -62,14 +62,17 @@ def init_engine():
     return search_engine
 
 def target_to_tensor(target, modality):
-    image_transform = transforms.Compose([
+    if modality == "image":
+        from torchvision import transforms
+        import PIL
+        image = PIL.Image.open(target)
+        image_transform = transforms.Compose([
             transforms.Resize((224,224)),
             transforms.ToTensor(),
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
-    if modality == "image":
-        tensor = image_transform(target)
+        tensor = image_transform(image)
     elif modality == "text":
-        tensor = word2vec_dict[target]
+        tensor = WORD2VEC[target]
     return tensor
 
 def allowed_file(filename):
@@ -77,20 +80,27 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def search(target, modality, n=5):
+    print(target, modality)
     tensor = target_to_tensor(target, modality).detach().to("cuda")
+    print(tensor.shape, tensor)
     model_name = search_engine.valid_models(tensor, modality)[0]
-    embedding = search_engine.models[model_name].get_embedding(tensor[None,:,:,:])[0]
+    if modality == "image":
+        #TODO: Make this less dumb
+        tensor = tensor[None,:,:,:]
+        
+    embedding = search_engine.models[model_name].get_embedding(tensor)
+    if modality == "image":
+        #TODO: Make this less dumb
+        embedding = embedding[0]
+        
     results = []
     for index_key in search_engine.valid_indexes(embedding):
         dis, idx = search_engine.search(embedding, index_key, n = n)
-        results.append([[index_key, dis, idx]])
+        data = search_engine.data_from_idx(index_key, idx)
+        dis = [float(d) for d in dis]
+        results.append([index_key, list(dis), list(data)])
     return results
             
-
-@app.route('/')
-def home():
-    return render_template('home.html')
-
 @app.route('/uploads/<path:filename>')
 def uploads(filename):
     return send_from_directory(UPLOAD_DIR, filename, as_attachment=True)
@@ -99,25 +109,25 @@ def uploads(filename):
 def data(filename):
     return send_from_directory(DATA_DIR, filename, as_attachment=True)
 
-@app.route('/query/<modality>', methods=['GET', 'POST'])
+@app.route('/query/<modality>', methods=['POST','GET'])
 def query(modality):
-    if request.method == "POST":
-        if modality == "text":
-            text = request.form["text"]
-            if text in WORD2VEC:
-                results = search(text, "text")
-                print(results)
-                return render_template('results.html', modality = modality, input = text)
-        elif modality == "image":
-            if 'file' in request.files:
-                f = request.files['file']
-                if f.filename and allowed_file(f.filename):
-                    filename = os.path.join(UPLOAD_DIR, secure_filename(f.filename))
-                    f.save(filename)
-                    return render_template('results.html', modality = modality, input = filename)
-        elif modality == "audio":
-            return "audio"
-    return redirect(url_for('home'))
+    if modality == "text":
+        text = request.form["text"]
+        if text in WORD2VEC:
+            results = search(text, "text")
+            return jsonify(results)
+    elif modality == "image":
+        if 'file' in request.files:
+            f = request.files['file']
+            if f.filename and allowed_file(f.filename):
+                filename = os.path.join(UPLOAD_DIR, secure_filename(f.filename))
+                f.save(filename)
+                results = search(filename, "image")
+                return jsonify(results)
+    elif modality == "audio":
+        return "audio not supported"
+    return "NOT SUPPORTED"
+    
 
 
 EMBEDDING_DIR = ""

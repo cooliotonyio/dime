@@ -49,6 +49,9 @@ class Dataset():
         Returns:
         iterable: Loader that yields baches
         '''
+        
+        #TODO: enable loading saved_embeddings midway
+        
         if load_embeddings:
             directory = "{}/{}/{}".format(save_directory, self.name, model.name)
             loader = self.load_embeddings(directory, model, binarized)
@@ -101,10 +104,10 @@ class Dataset():
         '''
         Loads previously saved embeddings from save_directory
         
-        Called by SearchEngine.fit(load_embeddings = True)
-        
         Parameters:
-        
+        directory: Directory of embeddings
+        model: Model object that outputted the saved embeddings
+        binarized: Boolean, True if the saved embedding is binarized. False otherwise.
         
         Yields:
         int: Batch index
@@ -199,8 +202,9 @@ class SearchEngine():
     def valid_models(self, tensor, modality):
         valid_models = []
         for model in list(self.models.values()):
-            if model.modality == modality and model.input_dimension == tuple(tensor.shape):
-                valid_models.append(model.name)
+            if model.modality == modality:
+                if model.input_dimension == tuple(tensor.shape):
+                    valid_models.append(model.name)
         return valid_models
     
     def valid_indexes(self, embedding):
@@ -227,8 +231,8 @@ class SearchEngine():
         
         Parameters:
         embeddings (np.array): Vector or list of vectors to search
+        index_key (tuple): Key of the index to search through
         n (int): Number of neighbors to return for each embedding
-        verbose (bool): Prints information about search
         
         Returns
         list: List of lists of distances of neighbors
@@ -236,11 +240,16 @@ class SearchEngine():
         '''
         assert index_key in self.indexes, "Index key not recognized"
         index = self.indexes[index_key]
+        single_vector = False
         if len(embeddings.shape) == 1:
             embeddings = embeddings[None,:]
+            single_vector = True
         embeddings = embeddings.cpu().detach().numpy()
         distances, idxs = index.search(embeddings, n)
-        return distances, idxs
+        if single_vector:
+            return distances[0], idxs[0]
+        else:
+            return distances, idxs
     
     def add_model(self, net, name, modality, input_dimension, output_dimension):
 
@@ -336,6 +345,8 @@ class SearchEngine():
             print("Finished building {} index in {} seconds.".format(model.name, round(time_elapsed, 4)))
             
     def data_from_idx(self, dataset_name, indicies):
+        if type(dataset_name) == tuple and len(dataset_name) == 3:
+            dataset_name = dataset_name[0]
         dataset = self.datasets[dataset_name]
         return [dataset.data[i] for i in indicies]
      
