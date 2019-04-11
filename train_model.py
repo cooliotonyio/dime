@@ -14,8 +14,8 @@ import numpy as np
 from networks import TextEmbeddingNet, Resnet152EmbeddingNet, IntermodalTripletNet, Resnet18EmbeddingNet
 from losses import InterTripletLoss
 
-### PARAMETERS ### 
-batch_size = 128
+### PARAMETERS ###
+batch_size = 512
 margin = 5
 lr = 1e-3
 n_epochs = 10
@@ -66,7 +66,7 @@ if feature_mode == 'resnet152':
     image_embedding_net = Resnet152EmbeddingNet(dim=output_embedding_size)
 elif feature_mode == 'resnet18':
     image_embedding_net = Resnet18EmbeddingNet(dim=output_embedding_size)
-    
+
 model = IntermodalTripletNet(image_embedding_net, text_embedding_net)
 if cuda:
     model.cuda()
@@ -78,4 +78,4 @@ scheduler = lr_scheduler.StepLR(optimizer, 8, gamma=0.1, last_epoch=-1)
 log_interval = 100
 fit(i_triplet_train_loader, i_triplet_val_loader, dataset, model, loss_fn, optimizer, scheduler, n_epochs, cuda, log_interval, text_dictionary)
 
-pickle.dump(model, open('pickles/models/entire_nuswide_model_10.p', 'wb'))
+pickle.dump(model, open('pickles/models/entire_nuswide_model_12.p', 'wb'))

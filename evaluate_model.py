@@ -14,7 +14,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 import csv
 import faiss
 
-model = pickle.load(open("pickles/models/entire_nuswide_model_9.p", "rb"))
+model = pickle.load(open("pickles/models/entire_nuswide_model_12.p", "rb"))
 relevancy_matrix = pickle.load(open("pickles/nuswide_metadata/relevancy_matrix.p", "rb"))
 features = pickle.load(open("pickles/nuswide_features/resnet152_nuswide_feats_arr.p", "rb"))
 NUS_WIDE_classes = []
@@ -125,6 +125,17 @@ def make_loaders_text():
                                      transforms.Normalize(mean,std)]), NUS_WIDE_classes, features=features)
 
     base_loader = pickle.load(open("./pickles/nuswide_metadata/base_loader.p", "rb"))
+
+    dataset_size = len(dataset)
+    validation_split = 0.3
+
+    indices = list(range(dataset_size))
+    split = int(np.floor(validation_split * dataset_size))
+    np.random.seed(21)
+    np.random.shuffle(indices)
+    test_indices = indices[:split]
+
+    test_sampler = SubsetRandomSampler(test_indices)
 
     # init loaders
     batch_size = 512
