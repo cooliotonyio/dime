@@ -1,3 +1,13 @@
+"""
+Running this script will fetch and cache all necessary datasets
+
+If datasets have already been downloaded to data_zipped, 
+this script will only extract/process/pickle the downloaded dataset
+
+If a re-download is desired, simple change FORCE_DOWNLOAD to True
+"""
+
+
 import os
 import io
 import torch
@@ -5,6 +15,8 @@ import pickle
 import tarfile
 from zipfile import ZipFile
 from util import fetch_and_cache
+
+FORCE_DOWNLOAD = False
 
 print("Starting setup... This might take a while.")
 print("Making directories...", end=" ")
@@ -23,13 +35,16 @@ print("Done!")
 print("Downloading NUSWIDE_metadata...")
 fetch_and_cache(data_url = 'http://dl.nextcenter.org/public/nuswide/NUS_WID_Tags.zip',
                 file = 'tags.zip',
-                data_dir = './data_zipped')
+                data_dir = './data_zipped',
+                force = FORCE_DOWNLOAD)
 fetch_and_cache(data_url = 'http://dl.nextcenter.org/public/nuswide/Groundtruth.zip',
                 file = 'groundtruth.zip',
-                data_dir = './data_zipped')
+                data_dir = './data_zipped'.
+                force = FORCE_DOWNLOAD)
 fetch_and_cache(data_url = 'http://dl.nextcenter.org/public/nuswide/ConceptsList.zip',
                 file = 'concepts.zip',
-                data_dir = './data_zipped')
+                data_dir = './data_zipped',
+                force = FORCE_DOWNLOAD)
 
 print("Extracting NUSWIDE metadata...")
 with ZipFile('data_zipped/tags.zip', 'r') as data_zipped:
@@ -50,7 +65,8 @@ print("Done processing and pickling NUSWIDE metadata!")
 print("Downloading the FastText word embeddings... (this might take some time)")
 fetch_and_cache(data_url = 'https://dl.fbaipublicfiles.com/fasttext/vectors-english/wiki-news-300d-1M.vec.zip',
                 file = 'word_vecs.zip',
-                data_dir = './data_zipped')
+                data_dir = './data_zipped',
+                force = FORCE_DOWNLOAD)
 
 print("Extracting FastText word embeddings...")
 with ZipFile('data_zipped/word_vecs.zip', 'r') as data_zipped:
@@ -75,7 +91,8 @@ print("Done processing word vectors!")
 print("Downloading NUSWIDE...(this will take a lot of time)")
 fetch_and_cache(data_url = 'https://s3-us-west-2.amazonaws.com/multimedia-berkeley/Flickr.tar.gz',  
                 file = "flickr.tar.gz", 
-                data_dir = "./data_zipped")
+                data_dir = "./data_zipped",
+                force = FORCE_DOWNLOAD)
       
 print("Extracting NUSWIDE... (this might take some time)")
 image_data = tarfile.open("./data_zipped/flickr.tar.gz")
