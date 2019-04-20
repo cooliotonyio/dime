@@ -7,8 +7,9 @@
     </div>
 </div>
 <div class="row justify-content-center">
-        <div class="col-4 text-center">
-            <h4>Modality:</h4> {{modality}}
+        <div class="col-1 text-center">
+            <h4>Modality:</h4> 
+            {{modality}}
         </div>
         <div class="col-4 text-center">
             <h4>Input:</h4>
@@ -16,8 +17,12 @@
                 {{input}}
             {% endif %}
             {% if modality == "image" %}
-                <img class="w-25" src="{{input}}">
+                <img class="w-75" src="{{input}}">
             {% endif %}
+        </div>
+        <div class="col-4 text-center">
+            <h4>Relevant Tags:</h4>
+            cat, dog, etc
         </div>
     </div>
 

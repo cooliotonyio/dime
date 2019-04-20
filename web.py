@@ -6,7 +6,7 @@ import os
 app = Flask(__name__)
 
 ALLOWED_EXTENSIONS = set(['jpg', 'jpeg',])
-ENGINE_URL = "http://ec2-35-171-8-91.compute-1.amazonaws.com"
+ENGINE_URL = "http://ec2-3-212-166-121.compute-1.amazonaws.com"
 
 def allowed_file(filename):
     return '.' in filename and \
