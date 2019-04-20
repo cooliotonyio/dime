@@ -49,9 +49,9 @@ def init_engine():
     save_directory = './embeddings'
     search_engine = SearchEngine(["text", "image"], cuda = cuda, save_directory = save_directory, verbose = True)
     search_engine.add_model(text_net, "text_net", "text", (300,) , 30)
-    search_engine.add_model(image_net, "image_net", "image", (3, 244, 244), 30)
+    search_engine.add_model(image_net, "image_net", "image", (3, 224, 224), 30)
     search_engine.add_dataset("wiki_word2vec", text_dataloader, text_from_idx, "text", (300,))
-    search_engine.add_dataset("nus-wide", image_dataloader, image_from_idx, "image", (3, 244, 244))
+    search_engine.add_dataset("nus-wide", image_dataloader, image_from_idx, "image", (3, 224, 224))
 
     #Build Indexes
     print("Building Indexes")
@@ -80,9 +80,9 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def search(target, modality, n=5):
-    print(target, modality)
     tensor = target_to_tensor(target, modality).detach().to("cuda")
-    print(tensor.shape, tensor)
+    print("SHAPE:\t", tensor.shape)
+    print("MODALITY:\t", modality)
     model_name = search_engine.valid_models(tensor, modality)[0]
     if modality == "image":
         #TODO: Make this less dumb
@@ -98,7 +98,8 @@ def search(target, modality, n=5):
         dis, idx = search_engine.search(embedding, index_key, n = n)
         data = search_engine.data_from_idx(index_key, idx)
         dis = [float(d) for d in dis]
-        results.append([index_key, list(dis), list(data)])
+        dataset = search_engine.datasets[index_key[0]]
+        results.append([index_key, list(dis), list(data), dataset.modality])
     return results
             
 @app.route('/uploads/<path:filename>')
@@ -116,14 +117,19 @@ def query(modality):
         if text in WORD2VEC:
             results = search(text, "text")
             return jsonify(results)
+        else:
+            print("WORD NOT IN DICTIONARY")
     elif modality == "image":
         if 'file' in request.files:
             f = request.files['file']
+            print("FILE FOUND")
             if f.filename and allowed_file(f.filename):
                 filename = os.path.join(UPLOAD_DIR, secure_filename(f.filename))
                 f.save(filename)
                 results = search(filename, "image")
                 return jsonify(results)
+        else:
+            print("NO FILE IN REQUEST")
     elif modality == "audio":
         return "audio not supported"
     return "NOT SUPPORTED"
