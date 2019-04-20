@@ -1,62 +1,42 @@
 import csv
-from torchvision import transforms
 from datasets import NUS_WIDE
-import torchvision as tv
-
 import pickle
 
+import torchvision as tv
+from torchvision import transforms
 import torch
 from torch.optim import lr_scheduler
 import torch.optim as optim
 from torch.autograd import Variable
-
 from trainer import fit
 import numpy as np
 
+from networks import TextEmbeddingNet, Resnet152EmbeddingNet, IntermodalTripletNet, Resnet18EmbeddingNet
+from losses import InterTripletLoss
+
+### PARAMETERS ###
+batch_size = 512
+margin = 5
+lr = 1e-3
+n_epochs = 10
+output_embedding_size = 64
+feature_mode = 'resnet152'
+##################
+
 cuda = torch.cuda.is_available()
-
-import matplotlib
-import matplotlib.pyplot as plt
-
 mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
 
 print("Loading NUS_WIDE dataset...")
 data_path = './data/Flickr'
 dataset = NUS_WIDE(root=data_path,
     transform=transforms.Compose([tv.transforms.Resize((224,224)), transforms.ToTensor(),
-                                 transforms.Normalize(mean,std)]))
-print("Done.")
-
-# setting up labels
-print("Loading in text labels...")
-with open('./data/labels.csv') as f:
-    reader = csv.reader(f)
-    NUS_WIDE_classes = [i[0] for i in list(reader)]
-for i in range(len(NUS_WIDE_classes)):
-    if '_' in NUS_WIDE_classes[i]:
-        NUS_WIDE_classes[i] = NUS_WIDE_classes[i].split('_')[0]
-    if NUS_WIDE_classes[i] == 'adobehouses':
-        NUS_WIDE_classes[i] = 'adobe'
-    if NUS_WIDE_classes[i] == 'kauai':
-        NUS_WIDE_classes[i] = 'hawaii'
-    if NUS_WIDE_classes[i] == 'oahu':
-        NUS_WIDE_classes[i] = 'hawaii'
-n_classes = len(NUS_WIDE_classes)
-print("Done.")
+                                 transforms.Normalize(mean,std)]), features=feature_mode)
+print("Done\n")
 
 # setting up dictionary
 print("Loading in word vectors...")
 text_dictionary = pickle.load(open("pickles/word_embeddings/word_embeddings_tensors.p", "rb"))
-print("Done")
-# setting up tag_matrix
-print("Loading in tag matrix")
-tag_matrix = pickle.load(open("pickles/nuswide_metadata/tag_matrix.p", "rb"))
-print("Done")
-# setting up concept_matrix
-print("Loading in concept matrix")
-concept_matrix = pickle.load(open("pickles/nuswide_metadata/concept_matrix.p", "rb"))
-print("Done")
-
+print("Done\n")
 
 # creating indices for training data and validation data
 print("Making training and validation indices...")
@@ -75,33 +55,27 @@ train_sampler = SubsetRandomSampler(train_indices)
 validation_sampler = SubsetRandomSampler(val_indices)
 print("Done.")
 
-# setting up loaders
-from networks import textEmbedding
-from losses import InterTripletLoss
-from networks import InterTripletNet
-
-batch_size = 256
+# making loaders
 kwargs = {'num_workers': 32, 'pin_memory': True} if cuda else {}
 i_triplet_train_loader = torch.utils.data.DataLoader(dataset,  batch_size=batch_size, sampler=train_sampler, **kwargs)
 i_triplet_val_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=validation_sampler, **kwargs)
 
 # Set up the network and training parameters
-from networks import EmbeddingNet, TripletNet
-from losses import TripletLoss
+text_embedding_net = TextEmbeddingNet(dim=output_embedding_size)
+if feature_mode == 'resnet152':
+    image_embedding_net = Resnet152EmbeddingNet(dim=output_embedding_size)
+elif feature_mode == 'resnet18':
+    image_embedding_net = Resnet18EmbeddingNet(dim=output_embedding_size)
 
-margin = 1.
-text_embedding_net = textEmbedding()
-image_embedding_net = EmbeddingNet()
-model = InterTripletNet(image_embedding_net, text_embedding_net)
+model = IntermodalTripletNet(image_embedding_net, text_embedding_net)
 if cuda:
     model.cuda()
-loss_fn = InterTripletLoss(1.0)
-lr = 1e-3
+
+loss_fn = InterTripletLoss(margin)
 optimizer = optim.Adam(model.parameters(), lr=lr)
 scheduler = lr_scheduler.StepLR(optimizer, 8, gamma=0.1, last_epoch=-1)
-n_epochs = 20
+
 log_interval = 100
+fit(i_triplet_train_loader, i_triplet_val_loader, dataset, model, loss_fn, optimizer, scheduler, n_epochs, cuda, log_interval, text_dictionary)
 
-fit(i_triplet_train_loader, i_triplet_val_loader, model, loss_fn, optimizer, scheduler, n_epochs, cuda, log_interval, text_dictionary, NUS_WIDE_classes, tag_matrix, concept_matrix)
-
-pickle.dump(model, open('pickles/models/entire_nuswide_model.p', 'wb'))
+pickle.dump(model, open('pickles/models/entire_nuswide_model_12.p', 'wb'))

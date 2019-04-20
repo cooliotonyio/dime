@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import random
 
-def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs, cuda, log_interval, word_vect_dict, text_labels, tag_matrix, concept_matrix, start_epoch=0, metrics=[]):
+def fit(train_loader, val_loader, dataset, model, loss_fn, optimizer, scheduler, n_epochs, cuda, log_interval, word_vect_dict, start_epoch=0, metrics=[]):
     """
     Loaders, model, loss function and metrics should work together for a given task,
     i.e. The model should be able to process data output of loaders,
@@ -21,15 +21,13 @@ def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs
         scheduler.step()
 
         # Train stage
-        train_loss, metrics = train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, metrics,
-                                          word_vect_dict, text_labels, tag_matrix, concept_matrix, word_vect_values)
+        train_loss, metrics = pass_epoch(train_loader, dataset, model, loss_fn, optimizer, cuda, log_interval, metrics, word_vect_dict, word_vect_values)
 
         message = 'Epoch: {}/{}. Train set: Average loss: {:.4f}'.format(epoch + 1, n_epochs, train_loss)
         for metric in metrics:
             message += '\t{}: {}'.format(metric.name(), metric.value())
 
-        val_loss, metrics = test_epoch(val_loader, model, loss_fn, cuda, metrics, word_vect_dict,
-                                       text_labels, tag_matrix, concept_matrix, word_vect_values)
+        val_loss, metrics = pass_epoch(val_loader, dataset, model, loss_fn, optimizer, cuda, log_interval, metrics,  word_vect_dict, word_vect_values, train=False)
         val_loss /= len(val_loader)
 
         message += '\nEpoch: {}/{}. Validation set: Average loss: {:.4f}'.format(epoch + 1, n_epochs,
@@ -39,69 +37,78 @@ def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs
 
         print(message)
 
-
-def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, metrics, word_vect_dict, text_labels, tag_matrix, concept_matrix, word_vect_values):
-    
+def pass_epoch(loader, dataset, model, loss_fn, optimizer, cuda, log_interval, metrics, word_vect_dict, word_vect_values, train=True):
     for metric in metrics:
         metric.reset()
 
-    model.train()
-    losses = []
+    if train:
+        model.train()
+        losses = []
+    else:
+        model.eval()
+
     total_loss = 0
 
-    for batch_idx, (indices, data, target) in enumerate(train_loader):
+    for batch_idx, (indices, data, target) in enumerate(loader):
         target = target if len(target) > 0 else None
 
         labels_set = set(target.numpy())
         label_to_indices = {label: np.where(target.numpy() == label)[0] for label in labels_set}
 
         intermod_triplet_data = [[],[],[],[],[],[]]
+        for i in range(len(intermod_triplet_data)):
+            intermod_triplet_data[i] = [None] * len(target)
 
         for idx in range(len(target)):
-            ds_idx = indices[idx]
-            img = data[idx]
-            label = target[idx]
-            b_idx = idx
-            
-            # setting anchors
+            ds_idx = indices[idx] # index of image in dataset (dataset index)
+            img = data[idx]       # image data (pre-extracted feature)
+            label = target[idx]   # label (folder label in nuswide)
+            b_idx = idx           # index of image in batch   (batch index)
+
+            #--- setting anchors ---
+            # -image anchor-
             a_img = img
-            if concept_matrix[ds_idx]:
-                try:
-                    concept_vec = random.choice(concept_matrix[ds_idx])
-                    a_txt = word_vect_dict[concept_vec] # anchor -> concept
-                except:
-                    print(concept_vec)
-                    a_txt = word_vect_dict[text_labels[label.item()]]
+
+            # -text anchor-
+            # sometimes an image has no associated concepts
+            if dataset.get_concepts(ds_idx):
+                #try:    # tests to see if there is a word embedding for the concept
+                    concept_vec = random.choice(dataset.get_concepts(ds_idx))
+                    a_txt = word_vect_dict[concept_vec]
+                #except: # use folder label as a backup
+                    #print(concept_vec)
+                    #a_txt = word_vect_dict[text_labels[label.item()]]
+            # use folder label as a backup
             else:
-                a_txt = word_vect_dict[text_labels[label.item()]]
+                a_txt = word_vect_dict[dataset.get_folder_label(label.item())]
 
-            # setting the positive word vector
+            # ---setting the positive word vector---
             try:
-                p_txt = word_vect_dict[random.choice(tag_matrix[ds_idx])]
+                p_txt = word_vect_dict[random.choice(dataset.tag_matrix[ds_idx])]
             except:
-                p_txt = word_vect_dict[text_labels[label.item()]]
+                p_txt = word_vect_dict[dataset.get_folder_label(label.item())]
 
-            # setting negative word vector
-            n_txt = random.choice(word_vect_values)
+            # ---setting negative word vector---
+            n_txt = word_vect_dict[random.choice(dataset.get_negative_concepts(ds_idx))]
 
-            # setting positive image
+            # ---setting positive image---
             positive_index = b_idx
             if len(label_to_indices[label.item()]) > 1:
                 while positive_index == b_idx:
                     positive_index = np.random.choice(label_to_indices[label.item()])
             p_img = data[positive_index]
 
-            # setting negative image
+            # ---setting negative image---
             negative_label = np.random.choice(list(labels_set - set([label.item()])))
             negative_index = np.random.choice(label_to_indices[negative_label])
             n_img = data[negative_index]
 
-            intermod_triplet_data[0].append(a_img)
-            intermod_triplet_data[1].append(p_txt)
-            intermod_triplet_data[2].append(n_txt)
-            intermod_triplet_data[3].append(a_txt)
-            intermod_triplet_data[4].append(p_img)
-            intermod_triplet_data[5].append(n_img)
+            intermod_triplet_data[0][b_idx] = a_img
+            intermod_triplet_data[1][b_idx] = p_txt
+            intermod_triplet_data[2][b_idx] = n_txt
+            intermod_triplet_data[3][b_idx] = a_txt
+            intermod_triplet_data[4][b_idx] = p_img
+            intermod_triplet_data[5][b_idx] = n_img
 
         intermod_triplet_data = [torch.stack(seq) for seq in intermod_triplet_data]
         target = None
@@ -128,33 +135,35 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
 
         loss_outputs = loss_fn(*loss_inputs)
         loss = loss_outputs[0] if type(loss_outputs) in (tuple, list) else loss_outputs
-        losses.append(loss.item())
         total_loss += loss.item()
-        loss.backward()
-        optimizer.step()
+        if train:
+            losses.append(loss.item())
+            loss.backward()
+            optimizer.step()
 
         for metric in metrics:
             metric(outputs, target, loss_outputs)
 
-        if batch_idx % log_interval == 0:
+        if batch_idx % log_interval == 0 and train:
             message = 'Train: [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                batch_idx * len(data[0]), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), np.mean(losses))
+                batch_idx * len(data[0]), len(loader.dataset),
+                100. * batch_idx / len(loader), np.mean(losses))
             for metric in metrics:
                 message += '\t{}: {}'.format(metric.name(), metric.value())
 
             print(message)
             losses = []
 
-    total_loss /= (batch_idx + 1)
+    if train:
+        total_loss /= (batch_idx + 1)
     return total_loss, metrics
 
 
-def test_epoch(val_loader, model, loss_fn, cuda, metrics, word_vect_dict, text_labels, tag_matrix, concept_matrix, word_vect_values):
+def test_epoch(val_loader, dataset, model, loss_fn, cuda, metrics, word_vect_dict, word_vect_values):
     with torch.no_grad():
         for metric in metrics:
             metric.reset()
-            
+
         model.eval()
         val_loss = 0
         for batch_idx, (indices, data, target) in enumerate(val_loader):
@@ -173,17 +182,17 @@ def test_epoch(val_loader, model, loss_fn, cuda, metrics, word_vect_dict, text_l
             intermod_triplet_test = [[],[],[],[],[],[]]
             for i in range(len(target)):
                 a_img = data[triplets[i][0]]
-                if concept_matrix[indices[i]]:
-                    a_txt = word_vect_dict[random.choice(concept_matrix[indices[i]])]
+                if dataset.get_concepts(indices[i]):
+                    a_txt = word_vect_dict[random.choice(dataset.get_concepts(indices[i]))]
                 else:
-                    a_txt = word_vect_dict[text_labels[target[i].item()]]
-                
-                try:
-                    p_txt = word_vect_dict[random.choice(tag_matrix[ds_idx])]
-                except:
-                    p_txt = word_vect_dict[text_labels[target[i].item()]]                       
+                    a_txt = word_vect_dict[dataset.get_folder_label(target[i].item())]
 
-                n_txt = random.choice(word_vect_values)
+                try:
+                    p_txt = word_vect_dict[random.choice(dataset.tag_matrix[indices[i]])]
+                except:
+                    p_txt = word_vect_dict[dataset.get_folder_label(target[i].item())]
+
+                n_txt = word_vect_dict[random.choice(dataset.get_negative_concepts(indices[i]))]
                 p_img = data[triplets[i][1]]
                 n_img = data[triplets[i][2]]
 
