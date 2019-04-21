@@ -80,6 +80,6 @@ optimizer = optim.Adam(model.parameters(), lr=lr)
 scheduler = lr_scheduler.StepLR(optimizer, 8, gamma=0.1, last_epoch=-1)
 
 log_interval = 100
-fit(i_triplet_train_loader, i_triplet_val_loader, dataset, model, loss_fn, optimizer, scheduler, n_epochs, cuda, log_interval, text_dictionary)
+fit(i_triplet_train_loader, i_triplet_val_loader, dataset.intermodal_triplet_batch_sampler, model, loss_fn, optimizer, scheduler, n_epochs, cuda, log_interval)
 
 pickle.dump(model, open('pickles/models/entire_nuswide_model_12.p', 'wb'))

@@ -258,6 +258,67 @@ class NUS_WIDE(BaseCMRetrievalDataset):
 
         return tags
 
+    def intermodal_triplet_batch_sampler(self, batch, cuda):
+        (indices, data, target) = batch
+        target = target if len(target) > 0 else None
+
+        labels_set = set(target.numpy())
+        label_to_indices = {label: np.where(target.numpy() == label)[0] for label in labels_set}
+
+        intermod_triplet_data = [[]] * 6
+        for i in range(len(intermod_triplet_data)):
+            intermod_triplet_data[i] = [None] * len(target)
+
+        for idx in range(len(target)):
+            ds_idx = indices[idx] # index of image in dataset (dataset index)
+            img = data[idx]       # image data (pre-extracted feature)
+            label = target[idx]   # label (folder label in nuswide)
+            b_idx = idx           # index of image in batch   (batch index)
+
+            # --- setting image anchor ---
+            a_img = img
+
+            # --- setting text anchor ---
+            if self.get_concepts(ds_idx):
+                concept_vec = random.choice(self.get_concepts(ds_idx))
+                a_txt = self.word_embeddings[concept_vec]
+            else:
+                a_txt = self.get_random_secondary_tag(ds_idx, dtype='embedding')
+
+            # ---setting the positive word vector---
+            p_txt = self.get_random_primary_tag(ds_idx, dtype='embedding')
+            if p_txt is None:
+                p_txt = self.get_random_secondary_tag(ds_idx, dtype='embedding')
+
+            # ---setting negative word vector---
+            n_txt = self.word_embeddings[random.choice(self.get_negative_concepts(ds_idx))]
+
+            # ---setting positive image---
+            positive_index = b_idx
+            if len(label_to_indices[label.item()]) > 1:
+                while positive_index == b_idx:
+                    positive_index = random.choice(label_to_indices[label.item()])
+            p_img = data[positive_index]
+
+            # ---setting negative image---
+            negative_label = random.choice(list(labels_set - set([label.item()])))
+            negative_index = random.choice(label_to_indices[negative_label])
+            n_img = data[negative_index]
+
+            intermod_triplet_data[0][b_idx] = a_img
+            intermod_triplet_data[1][b_idx] = p_txt
+            intermod_triplet_data[2][b_idx] = n_txt
+            intermod_triplet_data[3][b_idx] = a_txt
+            intermod_triplet_data[4][b_idx] = p_img
+            intermod_triplet_data[5][b_idx] = n_img
+
+        intermod_triplet_data = [torch.stack(seq) for seq in intermod_triplet_data]
+
+        if cuda:
+            intermod_triplet_data = tuple(d.cuda() for d in intermod_triplet_data)
+
+        return intermod_triplet_data
+
 
     def _get_random_embedding(self, index, mode, dtype):
         if mode == 'primary':
