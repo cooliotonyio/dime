@@ -72,21 +72,16 @@ def pass_epoch(loader, dataset, model, loss_fn, optimizer, cuda, log_interval, m
             # -text anchor-
             # sometimes an image has no associated concepts
             if dataset.get_concepts(ds_idx):
-                #try:    # tests to see if there is a word embedding for the concept
-                    concept_vec = random.choice(dataset.get_concepts(ds_idx))
-                    a_txt = word_vect_dict[concept_vec]
-                #except: # use folder label as a backup
-                    #print(concept_vec)
-                    #a_txt = word_vect_dict[text_labels[label.item()]]
+                concept_vec = random.choice(dataset.get_concepts(ds_idx))
+                a_txt = word_vect_dict[concept_vec]
             # use folder label as a backup
             else:
-                a_txt = word_vect_dict[dataset.get_folder_label(label.item())]
+                p_txt = dataset.get_random_secondary_tag(ds_idx, dtype='embedding')
 
             # ---setting the positive word vector---
-            try:
-                p_txt = word_vect_dict[random.choice(dataset.tag_matrix[ds_idx])]
-            except:
-                p_txt = word_vect_dict[dataset.get_folder_label(label.item())]
+            p_txt = dataset.get_random_primary_tag(ds_idx, dtype='embedding')
+            if p_txt is None:
+                p_txt = dataset.get_random_secondary_tag(ds_idx, dtype='embedding')
 
             # ---setting negative word vector---
             n_txt = word_vect_dict[random.choice(dataset.get_negative_concepts(ds_idx))]
