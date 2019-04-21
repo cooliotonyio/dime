@@ -76,7 +76,7 @@ def pass_epoch(loader, dataset, model, loss_fn, optimizer, cuda, log_interval, m
                 a_txt = word_vect_dict[concept_vec]
             # use folder label as a backup
             else:
-                p_txt = dataset.get_random_secondary_tag(ds_idx, dtype='embedding')
+                a_txt = dataset.get_random_secondary_tag(ds_idx, dtype='embedding')
 
             # ---setting the positive word vector---
             p_txt = dataset.get_random_primary_tag(ds_idx, dtype='embedding')
@@ -97,6 +97,13 @@ def pass_epoch(loader, dataset, model, loss_fn, optimizer, cuda, log_interval, m
             negative_label = np.random.choice(list(labels_set - set([label.item()])))
             negative_index = np.random.choice(label_to_indices[negative_label])
             n_img = data[negative_index]
+
+            print('1', type(a_img))
+            print('2',type(p_txt))
+            print('3',type(n_txt))
+            print('4',type(a_txt))
+            print('5',type(p_img))
+            print('6',type(n_img))
 
             intermod_triplet_data[0][b_idx] = a_img
             intermod_triplet_data[1][b_idx] = p_txt
@@ -153,76 +160,3 @@ def pass_epoch(loader, dataset, model, loss_fn, optimizer, cuda, log_interval, m
         total_loss /= (batch_idx + 1)
     return total_loss, metrics
 
-
-def test_epoch(val_loader, dataset, model, loss_fn, cuda, metrics, word_vect_dict, word_vect_values):
-    with torch.no_grad():
-        for metric in metrics:
-            metric.reset()
-
-        model.eval()
-        val_loss = 0
-        for batch_idx, (indices, data, target) in enumerate(val_loader):
-            target = target if len(target) > 0 else None
-
-            labels_set = set(target.numpy())
-            label_to_indices = {label: np.where(target.numpy() == label)[0] for label in labels_set}
-
-            rs = np.random.RandomState(29)
-            triplets = [
-                    [i, rs.choice(label_to_indices[target[i].item()]),
-                     rs.choice(label_to_indices[np.random.choice(list(labels_set - set([target[i].item()])))]),
-                     np.random.choice(list(labels_set - set([target[i].item()])))]
-                        for i in range(len(target))]
-
-            intermod_triplet_test = [[],[],[],[],[],[]]
-            for i in range(len(target)):
-                a_img = data[triplets[i][0]]
-                if dataset.get_concepts(indices[i]):
-                    a_txt = word_vect_dict[random.choice(dataset.get_concepts(indices[i]))]
-                else:
-                    a_txt = word_vect_dict[dataset.get_folder_label(target[i].item())]
-
-                try:
-                    p_txt = word_vect_dict[random.choice(dataset.tag_matrix[indices[i]])]
-                except:
-                    p_txt = word_vect_dict[dataset.get_folder_label(target[i].item())]
-
-                n_txt = word_vect_dict[random.choice(dataset.get_negative_concepts(indices[i]))]
-                p_img = data[triplets[i][1]]
-                n_img = data[triplets[i][2]]
-
-                intermod_triplet_test[0].append(a_img)
-                intermod_triplet_test[1].append(p_txt)
-                intermod_triplet_test[2].append(n_txt)
-                intermod_triplet_test[3].append(a_txt)
-                intermod_triplet_test[4].append(p_img)
-                intermod_triplet_test[5].append(n_img)
-
-            intermod_triplet_test = [torch.stack(seq) for seq in intermod_triplet_test]
-            target = None
-
-            if not type(data) in (tuple, list):
-                data = (data,)
-
-            if cuda:
-                intermod_triplet_test = tuple(d.cuda() for d in intermod_triplet_test)
-                if target is not None:
-                    target = target.cuda()
-
-            outputs = model(*intermod_triplet_test)
-
-            if type(outputs) not in (tuple, list):
-                outputs = (outputs,)
-            loss_inputs = outputs
-            if target is not None:
-                target = (target,)
-                loss_inputs += target
-
-            loss_outputs = loss_fn(*loss_inputs)
-            loss = loss_outputs[0] if type(loss_outputs) in (tuple, list) else loss_outputs
-            val_loss += loss.item()
-
-            for metric in metrics:
-                metric(outputs, target, loss_outputs)
-
-    return val_loss, metrics

@@ -7,6 +7,7 @@ from torch.utils.data import Dataset
 from torch.utils.data.sampler import BatchSampler
 import torch
 import pickle
+import random
 
 class BaseCMRetrievalDataset(Dataset):
     """
@@ -18,7 +19,7 @@ class BaseCMRetrievalDataset(Dataset):
         super(BaseCMRetrievalDataset, self).__init__()
         self._folder_names, self._folder_to_idx = self._find_folders(root)
 
-        self.image_paths, self._folder_targets = self._make_base(self, root, self._folder_to_idx)
+        self.image_paths, self._folder_targets = self._make_base(root, self._folder_to_idx)
 
         self.transform = transform
 
@@ -71,9 +72,9 @@ class BaseCMRetrievalDataset(Dataset):
             if not os.path.isdir(d):
                 continue
 
-            for root, _, fname in sorted(os.walk(d)):
+            for root, _, fnames in sorted(os.walk(d)):
                 for fname in sorted(fnames):
-                    if filename.lower().endswith(POS_EXT):
+                    if fname.lower().endswith(POS_EXT):
                         path = os.path.join(root, fname)
                         images.append(path)
                         folder_targets.append(folder_to_idx[target])
@@ -82,14 +83,14 @@ class BaseCMRetrievalDataset(Dataset):
 
 
     def __getitem__(self, index):
-        path = self.images[index]
+        path = self.image_paths[index]
         with open(path, 'rb') as f:
             img = Image.open(f).convert('RGB')
 
         if self.transform is not None:
             img = self.transform(img)
 
-        target = primary_tags[index]
+        target = self.primary_tags[index]
 
         return img, target
 
@@ -119,7 +120,7 @@ class BaseCMRetrievalDataset(Dataset):
 
 
     def __len__(self):
-        return len(self.images)
+        return len(self.image_paths)
 
 
 class NUS_WIDE(BaseCMRetrievalDataset):
@@ -129,12 +130,13 @@ class NUS_WIDE(BaseCMRetrievalDataset):
 
     """
 
-    def __init__(self, root, transform, feature_mode='resnet152', word_embeddings='fastText'):
+    def __init__(self, root, transform, feature_mode='resnet152', word_embeddings=None):
         primary_tags = pickle.load(open("pickles/nuswide_metadata/tag_matrix.p", "rb"))
 
         super(NUS_WIDE, self).__init__(root, transform, primary_tags=primary_tags)
 
-        self.primary_tags = self._filter_unavailable(self.primary_tags, )
+        self.primary_tags = NUS_WIDE._filter_unavailable(self.primary_tags, word_embeddings)
+        self._folder_names = pickle.load(open("pickles/nuswide_metadata/folder_labels.p", "rb"))
         self.secondary_tags = self._make_secondary_tags()
 
         self.feature_mode = feature_mode
@@ -146,8 +148,7 @@ class NUS_WIDE(BaseCMRetrievalDataset):
         else:
             self.features, self.feature_mode = None, 'vanilla'
 
-        if word_embeddings == 'fastText':
-            self.word_embeddings = pickle.load(open("pickles/word_embeddings/word_embeddings_tensors.p", "rb"))
+        self.word_embeddings = word_embeddings
 
         self.positive_concept_matrix = pickle.load(open("pickles/nuswide_metadata/concept_matrix.p", "rb"))
         self.negative_concept_matrix = pickle.load(open("pickles/nuswide_metadata/neg_concept_matrix.p", "rb"))
@@ -174,10 +175,10 @@ class NUS_WIDE(BaseCMRetrievalDataset):
         sample, target = super().__getitem__(index)
 
         if self.feature_mode is not 'vanilla':
-            return index, self.features[index], target
+            return index, self.features[index], self._folder_targets[index]
 
         if self.transform is not None:
-            return index, self.transform(sample), target
+            return index, self.transform(sample), self._folder_targets[index]
 
         return index, sample, target
 
@@ -249,10 +250,11 @@ class NUS_WIDE(BaseCMRetrievalDataset):
                                     that are unavailable
         """
 
-        for tag_list in tags:
-            for tag in tag_list:
-                if tag not in embedding_dictionary:
-                    tag_list.remove(tag)
+        for idx in range(len(tags)):
+            iter_list = list(tags[idx])
+            for tag in iter_list:
+                if not tag in embedding_dictionary:
+                    tags[idx].remove(tag)
 
         return tags
 
@@ -264,8 +266,16 @@ class NUS_WIDE(BaseCMRetrievalDataset):
             tag_set = self.secondary_tags
 
         tag_list = tag_set[index]
-        random_tag = random.choice(tag_list)
-        if mode == 'embedding':
+
+        if not tag_list:
+            return None
+
+        if not type(tag_list) is list:
+            random_tag = tag_list
+        else:
+            random_tag = random.choice(tag_list)
+
+        if dtype == 'embedding':
             return self.word_embeddings[random_tag]
 
         return random_tag
