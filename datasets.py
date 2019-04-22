@@ -82,11 +82,16 @@ class BaseCMRetrievalDataset(Dataset):
 
         return images, folder_targets
 
-
-    def __getitem__(self, index):
+    def _get_image(self, index):
         path = self.image_paths[index]
         with open(path, 'rb') as f:
             img = Image.open(f).convert('RGB')
+
+        return img
+
+
+    def __getitem__(self, index):
+        img = self._get_image(index)
 
         if self.transform is not None:
             img = self.transform(img)
@@ -147,15 +152,17 @@ class NUS_WIDE(BaseCMRetrievalDataset):
         self.feature_mode = feature_mode
 
         if feature_mode == 'resnet152':
-            self.features = pickle.load(open("pickles/nuswide_features/resnet152_nuswide_feats_arr.p","rb"))
+            self.features = pickle.load(open("pickles/nuswide_features/resnet152_nuswide_feats_dict.p","rb"))
         elif feature_mode == 'resnet18':
-            self.features = pickle.load(open("pickles/nuswide_features/resnet18_nuswide_feats_arr.p", "rb"))
+            self.features = pickle.load(open("pickles/nuswide_features/resnet18_nuswide_feats_dict.p", "rb"))
         else:
             self.features, self.feature_mode = None, 'vanilla'
 
         self.word_embeddings = word_embeddings
 
-        self.relevancy_matrix = NUS_WIDE.make_relevancy_matrix(root, train)
+        self.relevancy_matrix = NUS_WIDE.make_relevancy_matrix(train)
+
+        self.idx_to_concept = self._make_idx_to_concept()
 
         self.positive_concept_matrix, self.negative_concept_matrix = self._make_concept_matrices()
 
@@ -185,8 +192,7 @@ class NUS_WIDE(BaseCMRetrievalDataset):
 
         return image_paths
 
-    def _make_concept_matrices(self):
-        relevancy_matrix = self.relevancy_matrix
+    def _make_idx_to_concept(self):
         fname = "nuswide_metadata/Concepts81.txt"
 
         with open(fname) as f:
@@ -194,6 +200,13 @@ class NUS_WIDE(BaseCMRetrievalDataset):
 
         for idx, line in enumerate(idx_to_concept):
             idx_to_concept[idx] = line.split('\n')[0]
+
+        return idx_to_concept
+
+
+    def _make_concept_matrices(self):
+        relevancy_matrix = self.relevancy_matrix
+        idx_to_concept = self.idx_to_concept
 
         n = relevancy_matrix.shape[0]
         concept_matrix = [None] * n
@@ -213,14 +226,14 @@ class NUS_WIDE(BaseCMRetrievalDataset):
         return concept_matrix, neg_concept_matrix
 
 
-    def make_relevancy_matrix(dir, train=True):
+    def make_relevancy_matrix(train=True):
         path = './nuswide_metadata/TrainTestLabels/'
         if train:
             suffix_indicator = "Train.txt"
             n = 161789
         else:
             suffix_indicator = "Test.txt"
-            n = 107858
+            n = 107859
 
         relevancy_matrix = np.zeros((n,81), dtype=int)
         filenames = []
@@ -247,10 +260,11 @@ class NUS_WIDE(BaseCMRetrievalDataset):
             tuple: (index, data, target) where target is class_index of the target class.
         """
 
-        sample, target = super().__getitem__(index)
+        sample = self._get_image(index)
+        target = self._folder_targets[index]
 
         if self.feature_mode is not 'vanilla':
-            return index, self.features[index], self._folder_targets[index]
+            return index, self.features[self.image_paths[index]], self._folder_targets[index]
 
         if self.transform is not None:
             return index, self.transform(sample), self._folder_targets[index]
@@ -427,12 +441,9 @@ class NUS_WIDE(BaseCMRetrievalDataset):
 
 
 # Dataset used for nearest neighbors loading
-class NUS_WIDE_KNN(Dataset):
-    def __init__(self, root, transform, text_labels, features=None):
-        self.imgs = tv.datasets.ImageFolder(root=root)
-        self.transform = transform
-        self.text_labels = text_labels
-        self.features = features
+class NUS_WIDE_KNN(NUS_WIDE):
+    def __init__(self, root, transform, feature_mode='resnet152', train=True):
+        super(NUS_WIDE_KNN, self).__init__(root, transform, train=False)
 
     def __getitem__(self, index):
         """
@@ -443,14 +454,11 @@ class NUS_WIDE_KNN(Dataset):
         """
 
         if self.features is not None:
-            return self.features[index], index
-        return self.transform(self.imgs[index][0]), index
+            return self.features[self.image_paths[index]], index
+        return self.transform(self.imgs[index][0]), index # TODO: FIX
 
     def get_text_label(self, index):
         return self.text_labels[self.imgs[index][1]]
 
     def get_raw_image(self, index):
         return self.imgs[index][0]
-
-    def __len__(self):
-        return len(self.imgs)

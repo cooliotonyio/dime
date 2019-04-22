@@ -14,20 +14,25 @@ from torch.utils.data.sampler import SubsetRandomSampler
 import csv
 import faiss
 
-model = pickle.load(open("pickles/models/entire_nuswide_model_12.p", "rb"))
-relevancy_matrix = pickle.load(open("pickles/nuswide_metadata/relevancy_matrix.p", "rb"))
-features = pickle.load(open("pickles/nuswide_features/resnet152_nuswide_feats_arr.p", "rb"))
-NUS_WIDE_classes = []
+# init dataset
+mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
+data_path = './data/Flickr'
+dataset = NUS_WIDE_KNN(data_path,
+        transforms.Compose([tv.transforms.Resize((224,224)), transforms.ToTensor(),
+                                     transforms.Normalize(mean,std)]), feature_mode='resnet152', train=True)
 
-"""
-args:
-    tag_rankings: 2D matrix, 269648 x 81
-        tag_rankings[i:j]: the jth relevant tag of the ith image
+model = pickle.load(open("pickles/models/entire_nuswide_model_14.p", "rb"))
+relevancy_matrix = dataset.relevancy_matrix
 
-output:
-    MiAP score
-"""
 def MiAP(tag_rankings, q_indices):
+    """
+    args:
+        tag_rankings: 2D matrix, 269648 x 81
+            tag_rankings[i:j]: the jth relevant tag of the ith image
+
+    output:
+        MiAP score
+    """
     iAPs = np.zeros(len(q_indices))
 
     nonzero = 0
@@ -45,8 +50,8 @@ def MiAP(tag_rankings, q_indices):
         iAPs[idx] = np.divide(1, R) * S
         nonzero += 1
 
-    print(iAPs)
     return np.sum(iAPs) / nonzero
+
 
 def f1_precision_recall(t_indices, tag_rankings, k=3):
     top_k_relevant = tag_rankings[:,:k]
@@ -80,50 +85,13 @@ def f1_precision_recall(t_indices, tag_rankings, k=3):
     per_class_f1 = np.divide(2 * np.multiply(class_precisions, class_recalls), class_precisions + class_recalls)
     return per_class_f1, np.sum(Nc) / np.sum(Np), np.sum(Nc) / np.sum(Ng), class_precisions, class_recalls
 
-def make_loaders():
-   # init dataset
-    mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
-    data_path = 'NUS_WIDE'
 
-    dataset = NUS_WIDE_KNN(data_path,
-        transforms.Compose([tv.transforms.Resize((224,224)), transforms.ToTensor(),
-                                     transforms.Normalize(mean,std)]), NUS_WIDE_classes)
-    # splitting up train and test:
-    dataset_size = len(dataset)
-    validation_split = 0.3
-
-    indices = list(range(dataset_size))
-    split = int(np.floor(validation_split * dataset_size))
-    np.random.seed(21)
-    np.random.shuffle(indices)
-    train_indices, test_indices = indices[split:], indices[:split]
-
-    train_sampler = SubsetRandomSampler(train_indices)
-    test_sampler = SubsetRandomSampler(test_indices)
-
-    # init loaders
-    batch_size = 512
-    cuda = torch.cuda.is_available()
-    kwargs = {'num_workers': 32, 'pin_memory': True} if cuda else {}
-    train_loader = torch.utils.data.DataLoader(dataset,  batch_size=batch_size, sampler=train_sampler, **kwargs)
-    test_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=test_sampler, **kwargs)
-
-    return train_loader, test_loader
-
-"""
-    outputs:
-        base_loader: nuswide 81 concept pairs of (concept, FastText[concept])
-        query_loader: all nuswide images to query the faiss index
-"""
 def make_loaders_text():
-   # init dataset
-    mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
-    data_path = './data/Flickr'
-
-    dataset = NUS_WIDE_KNN(data_path,
-        transforms.Compose([tv.transforms.Resize((224,224)), transforms.ToTensor(),
-                                     transforms.Normalize(mean,std)]), NUS_WIDE_classes, features=features)
-
+    """
+        outputs:
+            base_loader: nuswide 81 concept pairs of (concept, FastText[concept])
+            query_loader: all nuswide *test* images to query the faiss index
+    """
     base_loader = pickle.load(open("./pickles/nuswide_metadata/base_loader.p", "rb"))
 
     dataset_size = len(dataset)
@@ -145,16 +113,18 @@ def make_loaders_text():
 
     return base_loader, query_loader
 
-"""
-output:
-    - t_indices | list :
-        - t_indices[i] = index of the ith test image in the original dataset
-    - ranking | # of test set images x 81 x 2 :
-        - ranking[i,j]: tuple corresponding to the jth ranked concept
-            - tuple[0]: count of number of appearances of jth ranked concept in k nearest neighbors retrieval
-            - tuple[1]: index of jth ranked concept
-"""
+
 def make_tag_ranking(model, train_loader, test_loader, relevancy_matrix):
+    """
+    output:
+        - t_indices | list :
+            - t_indices[i] = index of the ith test image in the original dataset
+        - ranking | # of test set images x 81 x 2 :
+            - ranking[i,j]: tuple corresponding to the jth ranked concept
+                - tuple[0]: count of number of appearances of jth ranked concept in k nearest neighbors retrieval
+                - tuple[1]: index of jth ranked concept
+    """
+
     nearest_images, t_indices = faiss_similarity(model, train_loader, test_loader)
 
     # ranking[i,j,:]: tuple corresponding to the jth relevant tag of image i
@@ -175,18 +145,19 @@ def make_tag_ranking(model, train_loader, test_loader, relevancy_matrix):
     return t_indices, ranking
 
 
-"""
-input:
-    - t_indices:
-    - ranking | # of test set images x 81 x 2 :
-        - ranking[i,j]: tuple corresponding to the jth ranked concept
-            - tuple[0]: count of number of appearances of jth ranked concept in k nearest neighbors retrieval
-            - tuple[1]: index of jth ranked concept
-output:
-    image_to_ranked_relevancy | 269645 x 81 matrix :
-        - [i,j]: jth ranked concept to the ith image
-"""
 def make_image_ranked_relevancy_matrix(t_indices, ranking):
+    """
+    input:
+        - t_indices:
+        - ranking | # of test set images x 81 x 2 :
+            - ranking[i,j]: tuple corresponding to the jth ranked concept
+                - tuple[0]: count of number of appearances of jth ranked concept in k nearest neighbors retrieval
+                - tuple[1]: index of jth ranked concept
+    output:
+        image_to_ranked_relevancy | 269645 x 81 matrix :
+            - [i,j]: jth ranked concept to the ith image
+    """
+
     largest_index = t_indices.max()
     image_to_ranked_relevancy = np.full((largest_index + 1, ranking.shape[1]), -1)
 
@@ -196,17 +167,18 @@ def make_image_ranked_relevancy_matrix(t_indices, ranking):
     return image_to_ranked_relevancy
 
 
-"""
-output:
-    indices | a matrix:
-        - indices[i,j]: index of jth relevant image of image i
-            (where image i is a query from the test loader)
-            (where the index of jth relevant image is the index in the full dataset)
-    t_indices | a list:
-        - ith entry is an index in the original dataset that corresponds to the ith image of the test set
-"""
 
 def faiss_similarity(model, base_loader, query_loader, k=64):
+    """
+    output:
+        indices | a matrix:
+            - indices[i,j]: index of jth relevant image of image i
+                (where image i is a query from the test loader)
+                (where the index of jth relevant image is the index in the full dataset)
+        q_indices | a list:
+            - ith entry is an index in the original dataset that corresponds to the ith image of the test set
+    """
+
     base_db, b_indices = make_db_text(model, base_loader)
     query_db, q_indices = make_db_images(model, query_loader)
 
@@ -278,13 +250,24 @@ def display_metrics():
     miap = MiAP(tag_rankings, q_indices)
     f1, overall_precision, overall_recall, class_precisions, class_recalls = f1_precision_recall(q_indices, tag_rankings, k=7)
 
-    print("MiAP:", miap)
-    print("f1: ", np.nanmean(f1))
-    print("overall Precision: ", overall_precision)
-    print("overall Recall: ", overall_recall)
-    print("per class Precision: ", class_precisions)
-    print("per class Recall: ", class_recalls)
-    print("mean class Precision: ", np.sum(class_precisions), len(np.nonzero(class_precisions)[0]))
-    print("mean class Recall: ", np.sum(class_recalls), len(np.nonzero(class_recalls)[0]))
+    print("MiAP:", miap, "\n")
+    print("F1: ", np.nanmean(f1), "\n")
+    print("OVERALL PRECISION: ", overall_precision, "\n")
+    print("OVERALL RECALL: ", overall_recall, "\n")
+
+    print("______________________")
+    print("PER CLASS PRECISION: ", "\n")
+    for idx in range(len(class_precisions)):
+        print((dataset.idx_to_concept[idx] + ": ").ljust(15), class_precisions[idx])
+    print("______________________\n")
+
+    print("______________________")
+    print("PER CLASS RECALL: ", "\n")
+    for idx in range(len(class_recalls)):
+        print((dataset.idx_to_concept[idx] + ": ").ljust(15), class_recalls[idx])
+    print("______________________\n")
+
+    print("MEAN CLASS PRECISION: ", np.sum(class_precisions), len(np.nonzero(class_precisions)[0]))
+    print("MEAN CLASS RECALL: ", np.sum(class_recalls), len(np.nonzero(class_recalls)[0]))
 
 display_metrics()

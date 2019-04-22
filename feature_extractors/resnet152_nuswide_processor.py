@@ -47,7 +47,7 @@ for i in range(len(dataset)):
     print("file: ", i)
     file_path = dataset.imgs.samples[i][0]
     feature_i = get_image_feature(file_path)
-    feature_dict[file_path] = feature_i
+    feature_dict[file_path] = feature_i.cpu().squeeze()
     feature_array[i] = feature_i.cpu().squeeze()
 
 pickle.dump(feature_dict, open(base + 'resnet152_nuswide_feats_dict.p', 'wb'))

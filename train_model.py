@@ -15,7 +15,7 @@ from networks import TextEmbeddingNet, Resnet152EmbeddingNet, IntermodalTripletN
 from losses import InterTripletLoss
 
 ### PARAMETERS ###
-batch_size = 512
+batch_size = 128
 margin = 5
 lr = 1e-3
 n_epochs = 10
@@ -38,7 +38,8 @@ dataset = NUS_WIDE(root=data_path,
                                                     transforms.ToTensor(),
                                                     transforms.Normalize(mean,std)]),
                     feature_mode=feature_mode,
-                    word_embeddings=text_dictionary)
+                    word_embeddings=text_dictionary,
+                    train=True)
 print("Done\n")
 
 
@@ -47,7 +48,7 @@ print("Making training and validation indices...")
 from torch.utils.data.sampler import SubsetRandomSampler
 
 dataset_size = len(dataset)
-validation_split = 0.3
+validation_split = 0.2
 
 indices = list(range(dataset_size))
 split = int(np.floor(validation_split * dataset_size))
@@ -82,4 +83,4 @@ scheduler = lr_scheduler.StepLR(optimizer, 8, gamma=0.1, last_epoch=-1)
 log_interval = 100
 fit(i_triplet_train_loader, i_triplet_val_loader, dataset.intermodal_triplet_batch_sampler, model, loss_fn, optimizer, scheduler, n_epochs, cuda, log_interval)
 
-pickle.dump(model, open('pickles/models/entire_nuswide_model_13.p', 'wb'))
+pickle.dump(model, open('pickles/models/entire_nuswide_model_14.p', 'wb'))
