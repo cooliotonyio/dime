@@ -8,6 +8,7 @@ from torch.utils.data.sampler import BatchSampler
 import torch
 import pickle
 import random
+import numpy as np
 
 class BaseCMRetrievalDataset(Dataset):
     """
@@ -130,12 +131,16 @@ class NUS_WIDE(BaseCMRetrievalDataset):
 
     """
 
-    def __init__(self, root, transform, feature_mode='resnet152', word_embeddings=None):
+    def __init__(self, root, transform, train=True, feature_mode='resnet152', word_embeddings=None):
         primary_tags = pickle.load(open("pickles/nuswide_metadata/tag_matrix.p", "rb"))
 
         super(NUS_WIDE, self).__init__(root, transform, primary_tags=primary_tags)
 
-        self.primary_tags = NUS_WIDE._filter_unavailable(self.primary_tags, word_embeddings)
+        self.image_paths = self._make_image_paths(root, train)
+
+        if word_embeddings is not None:
+            self.primary_tags = NUS_WIDE._filter_unavailable(self.primary_tags, word_embeddings)
+
         self._folder_names = pickle.load(open("pickles/nuswide_metadata/folder_labels.p", "rb"))
         self.secondary_tags = self._make_secondary_tags()
 
@@ -150,9 +155,9 @@ class NUS_WIDE(BaseCMRetrievalDataset):
 
         self.word_embeddings = word_embeddings
 
-        self.positive_concept_matrix = pickle.load(open("pickles/nuswide_metadata/concept_matrix.p", "rb"))
-        self.negative_concept_matrix = pickle.load(open("pickles/nuswide_metadata/neg_concept_matrix.p", "rb"))
-        self.relevancy_matrix = pickle.load(open("pickles/nuswide_metadata/relevancy_matrix.p", "rb"))
+        self.relevancy_matrix = NUS_WIDE.make_relevancy_matrix(root, train)
+
+        self.positive_concept_matrix, self.negative_concept_matrix = self._make_concept_matrices()
 
 
     def _make_secondary_tags(self):
@@ -163,6 +168,76 @@ class NUS_WIDE(BaseCMRetrievalDataset):
 
         return [self._folder_names[self._folder_targets[i]] for i in range(len(self))]
 
+
+    def _make_image_paths(self, dir, train=True):
+        if train:
+            file_paths_fname = "./nuswide_metadata/Imagelist/TrainImagelist.txt"
+        else:
+            file_paths_fname = "./nuswide_metadata/Imagelist/TestImagelist.txt"
+
+        image_paths = []
+
+        with open(file_paths_fname) as fn:
+            lines = fn.readlines()
+
+        for line in lines:
+            image_paths.append(os.path.join(dir, line.split('\n')[0].replace("\\","/")))
+
+        return image_paths
+
+    def _make_concept_matrices(self):
+        relevancy_matrix = self.relevancy_matrix
+        fname = "nuswide_metadata/Concepts81.txt"
+
+        with open(fname) as f:
+            idx_to_concept = f.readlines()
+
+        for idx, line in enumerate(idx_to_concept):
+            idx_to_concept[idx] = line.split('\n')[0]
+
+        n = relevancy_matrix.shape[0]
+        concept_matrix = [None] * n
+        neg_concept_matrix = [None] * n
+
+        for idx, line in enumerate(relevancy_matrix):
+            concepts = []
+            neg_concepts = []
+            for count, indicator in enumerate(line):
+                if indicator == 1:
+                    concepts.append(idx_to_concept[count])
+                else:
+                    neg_concepts.append(idx_to_concept[count])
+            concept_matrix[idx] = concepts
+            neg_concept_matrix[idx] = neg_concepts
+
+        return concept_matrix, neg_concept_matrix
+
+
+    def make_relevancy_matrix(dir, train=True):
+        path = './nuswide_metadata/TrainTestLabels/'
+        if train:
+            suffix_indicator = "Train.txt"
+            n = 161789
+        else:
+            suffix_indicator = "Test.txt"
+            n = 107858
+
+        relevancy_matrix = np.zeros((n,81), dtype=int)
+        filenames = []
+
+        for idx, filename in enumerate(os.listdir(path)):
+            if filename.endswith(suffix_indicator):
+                filenames.append(filename)
+
+        filenames.sort()
+
+        for idx, filename in enumerate(filenames):
+            with open(path + filename) as f:
+                content = f.readlines()
+                curr_column = np.array([int(i[0]) for i in content], dtype=int)
+            relevancy_matrix[:, idx] = curr_column
+
+        return relevancy_matrix
 
     def __getitem__(self, index):
         """
@@ -181,6 +256,7 @@ class NUS_WIDE(BaseCMRetrievalDataset):
             return index, self.transform(sample), self._folder_targets[index]
 
         return index, sample, target
+
 
 
     def get_concepts(self, index):
@@ -259,6 +335,14 @@ class NUS_WIDE(BaseCMRetrievalDataset):
         return tags
 
     def intermodal_triplet_batch_sampler(self, batch, cuda):
+        """
+        Batch sampling function for crossmodal triplet loss
+
+        Args:
+            Batch (tuple): tensors of length batch size
+
+
+        """
         (indices, data, target) = batch
         target = target if len(target) > 0 else None
 

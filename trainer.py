@@ -26,7 +26,6 @@ def fit(train_loader, val_loader, batch_sampler, model, loss_fn, optimizer, sche
             message += '\t{}: {}'.format(metric.name(), metric.value())
 
         val_loss, metrics = pass_epoch(val_loader, batch_sampler, model, loss_fn, optimizer, cuda, log_interval, metrics, train=False)
-        val_loss /= len(val_loader)
 
         message += '\nEpoch: {}/{}. Validation set: Average loss: {:.4f}'.format(epoch + 1, n_epochs,
                                                                                  val_loss)
@@ -84,7 +83,6 @@ def pass_epoch(loader, batch_sampler, model, loss_fn, optimizer, cuda, log_inter
             print(message)
             losses = []
 
-    if train:
-        total_loss /= (batch_idx + 1)
+    total_loss /= (batch_idx + 1)
     return total_loss, metrics
 
