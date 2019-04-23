@@ -2,72 +2,77 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-8 text-center">
-        <h1 class="pt-5">Query:</h1>
-    </div>
+  <div class="col-8 text-center">
+    <h1 class="pt-5">Query:</h1>
+  </div>
 </div>
 <div class="row justify-content-center">
-        <div class="col-1 text-center">
-            <h4>Modality:</h4> 
-            {{modality}}
-        </div>
-        <div class="col-4 text-center">
-            <h4>Input:</h4>
-            {% if modality == "text" %}
-                {{input}}
-            {% endif %}
-            {% if modality == "image" %}
-                <img class="w-75" src="{{input}}">
-            {% endif %}
-        </div>
-        <div class="col-4 text-center">
-            <h4>Relevant Tags:</h4>
-            cat, dog, etc
-        </div>
+  <div class="col-1 text-center">
+    <h4>Modality:</h4> 
+    {{modality}}
+    <br>
+    <br>
+    <a class="btn btn-primary pt-3" role="button" href="/">Search Another</a>
     </div>
+    <div class="col-4 text-center">
+      <h4>Input:</h4>
+      {% if modality == "text" %}
+        {{input}}
+      {% endif %}
+      {% if modality == "image" %}
+        <img height="100" src="{{input}}">
+      {% endif %}
+    </div>
+    <div class="col-4 text-center">
+      <h4>Relevant Tags:</h4>
+      cat, dog, etc
+  </div>
+</div>
 
 
 <div class="row justify-content-center">
-    <div class="col-8 text-center">
-        <h1 class="pt-5">Results:</h1>
-        <ul class="nav nav-tabs" id="myTab" role="tablist">
-        {% for i in range(num_datasets) %}
-            <li class="nav-item">
-                <a class="nav-link {% if i == 0 %} active {% endif %}" id="results_{{i}}-tab" data-toggle="tab" href="#results_{{i}}" role="tab" aria-controls="results_{{i}}" aria-selected="true">{{results[i][0]}}</a>
-            </li>
-        {% endfor %}
-        </ul>
-        <div class="tab-content" id="myTabContent">
-        {% for i in range(num_datasets) %}
-            <div class="tab-pane fade {% if i == 0 %} show active {% endif %}" id="results_{{i}}" role="tabpanel" aria-labelledby="results_{{i}}-tab">
-                <table class="table">
-                    <thead>
-                        <tr>
-                        <th scope="col">#</th>
-                        <th scope="col">Distance</th>
-                        <th scope="col">Result ({{results[i][3]}}) </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for j in range(num_results)%}
-                        <tr>
-                        <th scope="row">{{j}}</th>
-                        <td>{{results[i][1][j]}}</td>
-                        <td>
-                        {% if results[i][3] == "image" %}
-                            <img class="w-50" src="{{engine_url}}/{{results[i][2][j]}}">
-                        {% endif %}
-                        {% if results[i][3] == "text" %}
-                            {{results[i][2][j]}}
-                        {% endif %}
-                        </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% endfor %}
+  <div class="col-8 text-center">
+    <h1 class="pt-5">Results:</h1>
+    <ul class="nav nav-tabs" id="myTab" role="tablist">
+    {% for result in results %}
+      <li class="nav-item">
+        <a class="nav-link {% if loop.index0 == 0 %} active {% endif %}" id="results_{{loop.index0}}-tab" data-toggle="tab" href="#results_{{loop.index0}}" role="tab" aria-controls="results_{{loop.index0}}" aria-selected="true">{{result[0]}}</a>
+      </li>
+    {% endfor %}
+    </ul>
+  </div>
+</div>
+
+<div class="tab-content" id="myTabContent">
+{% for result in results %}
+  <div class="tab-pane fade {% if loop.index0 == 0 %} show active {% endif %}" id="results_{{loop.index0}}" role="tabpanel" aria-labelledby="results_{{loop.index0}}-tab">
+    <div class="row px-5">
+      {% for j in range(result["num_results"])%}
+      <div class="col">
+        {% if result["modality"] == "image" %}
+          <img class="w-100" src="{{engine_url}}/{{result['data'][j]}}">
+        {% endif %}
+        {% if results["modality"] == "text" %}
+          {{result['data'][j]}}
+        {% endif %}
+        <br>
+        <div>
+          Distance: {{result['distance'][j]}}
         </div>
+        <a 
+          role="button" 
+          class="btn btn-primary" 
+          href="/query/index/?
+          query_input={{engine_url}}/{{result['data'][j]}}
+          index={{result['index_key']}}
+          target={{result['idx'][j]}}'">
+          Similar
+        </a>           
+      </div>
+      {% endfor %}
     </div>
+
+  </div>
+{% endfor %}
 </div>
 {% endblock %}
