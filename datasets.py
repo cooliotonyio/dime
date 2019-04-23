@@ -138,7 +138,7 @@ def idx_maker(fname):
 
     return idx_to_
 
-def label_matrices_maker(relevancy_matrix, idx_to_label):
+def label_matrices_maker(relevancy_matrix, idx_to_label, exclude_list=None):
     n = relevancy_matrix.shape[0]
     label_matrix = [None] * n
     neg_label_matrix = [None] * n
@@ -147,6 +147,9 @@ def label_matrices_maker(relevancy_matrix, idx_to_label):
         labels = []
         neg_labels = []
         for count, indicator in enumerate(line):
+            if exclude_list is not None and idx_to_label[count] in exclude_list:
+                continue
+
             if indicator == 1:
                 labels.append(idx_to_label[count])
             else:
@@ -250,7 +253,7 @@ class NUS_WIDE(BaseCMRetrievalDataset):
     def _make_tag_matrices(self):
         tag_relevancy_matrix = self.tag_relevancy_matrix
         idx_to_tag = self.idx_to_tag
-        tag_matrix, neg_tag_matrix = label_matrices_maker(tag_relevancy_matrix, idx_to_tag)
+        tag_matrix, neg_tag_matrix = label_matrices_maker(tag_relevancy_matrix, idx_to_tag, exclude_list=self.idx_to_concept)
         return tag_matrix, neg_tag_matrix
 
 
@@ -408,8 +411,23 @@ class NUS_WIDE(BaseCMRetrievalDataset):
         (indices, data, target) = batch
         target = target if len(target) > 0 else None
 
-        labels_set = set(target.numpy())
-        label_to_indices = {label: np.where(target.numpy() == label)[0] for label in labels_set}
+
+        labels_set = set()
+        label_to_indices = dict()
+        for idx in indices:
+            sec_tag = self.secondary_tags[idx]
+            if sec_tag not in label_to_indices:
+                label_to_indices[sec_tag] = [idx]
+            else:
+                label_to_indices[sec_tag].append(idx)
+
+            for tag in self.get_primary_tags(idx):
+                labels_set.add(tag)
+                if tag not in label_to_indices:
+                    label_to_indices[tag] = [idx]
+                else:
+                    label_to_indices[tag].append(idx)
+
 
         intermod_triplet_data = [[]] * 6
         for i in range(len(intermod_triplet_data)):
@@ -438,16 +456,17 @@ class NUS_WIDE(BaseCMRetrievalDataset):
             n_txt = self.word_embeddings[random.choice(self.negative_tag_matrix[ds_idx])]
 
             # ---setting positive image---
-            positive_index = b_idx
-            if len(label_to_indices[label.item()]) > 1:
-                while positive_index == b_idx:
-                    positive_index = random.choice(label_to_indices[label.item()])
-            p_img = data[positive_index]
+            positive_tag = self.get_random_primary_tag(ds_idx, dtype='string')
+            if positive_tag is None:
+                positive_tag = self.get_random_secondary_tag(ds_idx, dtype='string')
+
+            positive_index = random.choice(label_to_indices[positive_tag])
+            p_img = self[positive_index][1]
 
             # ---setting negative image---
-            negative_label = random.choice(list(labels_set - set([label.item()])))
+            negative_label = random.choice(list(labels_set - set(self.get_primary_tags(ds_idx))))
             negative_index = random.choice(label_to_indices[negative_label])
-            n_img = data[negative_index]
+            n_img = self[negative_index][1]
 
             intermod_triplet_data[0][b_idx] = a_img
             intermod_triplet_data[1][b_idx] = p_txt
