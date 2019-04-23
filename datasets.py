@@ -129,6 +129,33 @@ class BaseCMRetrievalDataset(Dataset):
         return len(self.image_paths)
 
 
+def idx_maker(fname):
+    with open(fname) as f:
+        idx_to_ = f.readlines()
+
+    for idx, line in enumerate(idx_to_):
+        idx_to_[idx] = line.split('\n')[0]
+
+    return idx_to_
+
+def label_matrices_maker(relevancy_matrix, idx_to_label):
+    n = relevancy_matrix.shape[0]
+    label_matrix = [None] * n
+    neg_label_matrix = [None] * n
+
+    for idx, line in enumerate(relevancy_matrix):
+        labels = []
+        neg_labels = []
+        for count, indicator in enumerate(line):
+            if indicator == 1:
+                labels.append(idx_to_label[count])
+            else:
+                neg_labels.append(idx_to_label[count])
+        label_matrix[idx] = labels
+        neg_label_matrix[idx] = neg_labels
+
+    return label_matrix, neg_label_matrix
+
 class NUS_WIDE(BaseCMRetrievalDataset):
     """
     Description:
@@ -139,12 +166,9 @@ class NUS_WIDE(BaseCMRetrievalDataset):
     def __init__(self, root, transform, train=True, feature_mode='resnet152', word_embeddings=None):
         primary_tags = pickle.load(open("pickles/nuswide_metadata/tag_matrix.p", "rb"))
 
-        super(NUS_WIDE, self).__init__(root, transform, primary_tags=primary_tags)
+        super(NUS_WIDE, self).__init__(root, transform, primary_tags=None)
 
         self.image_paths = self._make_image_paths(root, train)
-
-        if word_embeddings is not None:
-            self.primary_tags = NUS_WIDE._filter_unavailable(self.primary_tags, word_embeddings)
 
         self._folder_names = pickle.load(open("pickles/nuswide_metadata/folder_labels.p", "rb"))
         self.secondary_tags = self._make_secondary_tags()
@@ -160,11 +184,23 @@ class NUS_WIDE(BaseCMRetrievalDataset):
 
         self.word_embeddings = word_embeddings
 
-        self.relevancy_matrix = NUS_WIDE.make_relevancy_matrix(train)
+        self.concept_relevancy_matrix = NUS_WIDE.make_concept_relevancy_matrix(train)
 
-        self.idx_to_concept = self._make_idx_to_concept()
+        self.idx_to_concept = NUS_WIDE._make_idx_to_concept()
 
         self.positive_concept_matrix, self.negative_concept_matrix = self._make_concept_matrices()
+
+        self.tag_relevancy_matrix = NUS_WIDE.make_tag_relevancy_matrix(train)
+
+        self.idx_to_tag = NUS_WIDE._make_idx_to_tag()
+
+        self.positive_tag_matrix, self.negative_tag_matrix = self._make_tag_matrices()
+
+        if word_embeddings is not None:
+            self.primary_tags = NUS_WIDE._filter_unavailable(self.positive_tag_matrix, word_embeddings)
+
+        if word_embeddings is not None:
+            self.negative_tag_matrix = NUS_WIDE._filter_unavailable(self.negative_tag_matrix, word_embeddings)
 
 
     def _make_secondary_tags(self):
@@ -192,41 +228,33 @@ class NUS_WIDE(BaseCMRetrievalDataset):
 
         return image_paths
 
-    def _make_idx_to_concept(self):
+    def _make_idx_to_concept():
         fname = "nuswide_metadata/Concepts81.txt"
-
-        with open(fname) as f:
-            idx_to_concept = f.readlines()
-
-        for idx, line in enumerate(idx_to_concept):
-            idx_to_concept[idx] = line.split('\n')[0]
-
+        idx_to_concept = idx_maker(fname)
         return idx_to_concept
 
 
+    def _make_idx_to_tag():
+        fname = "./nuswide_metadata/TagList1k.txt"
+        idx_to_tag = idx_maker(fname)
+        return idx_to_tag
+
+
     def _make_concept_matrices(self):
-        relevancy_matrix = self.relevancy_matrix
+        concept_relevancy_matrix = self.concept_relevancy_matrix
         idx_to_concept = self.idx_to_concept
-
-        n = relevancy_matrix.shape[0]
-        concept_matrix = [None] * n
-        neg_concept_matrix = [None] * n
-
-        for idx, line in enumerate(relevancy_matrix):
-            concepts = []
-            neg_concepts = []
-            for count, indicator in enumerate(line):
-                if indicator == 1:
-                    concepts.append(idx_to_concept[count])
-                else:
-                    neg_concepts.append(idx_to_concept[count])
-            concept_matrix[idx] = concepts
-            neg_concept_matrix[idx] = neg_concepts
-
+        concept_matrix, neg_concept_matrix = label_matrices_maker(concept_relevancy_matrix, idx_to_concept)
         return concept_matrix, neg_concept_matrix
 
 
-    def make_relevancy_matrix(train=True):
+    def _make_tag_matrices(self):
+        tag_relevancy_matrix = self.tag_relevancy_matrix
+        idx_to_tag = self.idx_to_tag
+        tag_matrix, neg_tag_matrix = label_matrices_maker(tag_relevancy_matrix, idx_to_tag)
+        return tag_matrix, neg_tag_matrix
+
+
+    def make_concept_relevancy_matrix(train=True):
         path = './nuswide_metadata/TrainTestLabels/'
         if train:
             suffix_indicator = "Train.txt"
@@ -251,6 +279,26 @@ class NUS_WIDE(BaseCMRetrievalDataset):
             relevancy_matrix[:, idx] = curr_column
 
         return relevancy_matrix
+
+
+    def make_tag_relevancy_matrix(train=True):
+        if train:
+            path = './nuswide_metadata/Train_Tags1k.dat'
+            n = 161789
+        else:
+            path = './nuswide_metadata/Test_Tags1k.dat'
+            n = 107859
+
+        relevancy_matrix = np.zeros((n,1000), dtype=int)
+
+        with open(path) as f:
+            lines = f.readlines()
+
+        for idx, line in enumerate(lines):
+            relevancy_matrix[idx,:] = np.array([int(i) for i in line.split('\t')[:-1]])
+
+        return relevancy_matrix
+
 
     def __getitem__(self, index):
         """
@@ -377,10 +425,8 @@ class NUS_WIDE(BaseCMRetrievalDataset):
             a_img = img
 
             # --- setting text anchor ---
-            if self.get_concepts(ds_idx):
-                concept_vec = random.choice(self.get_concepts(ds_idx))
-                a_txt = self.word_embeddings[concept_vec]
-            else:
+            a_txt = self.get_random_primary_tag(ds_idx, dtype='embedding')
+            if a_txt is None:
                 a_txt = self.get_random_secondary_tag(ds_idx, dtype='embedding')
 
             # ---setting the positive word vector---
@@ -389,7 +435,7 @@ class NUS_WIDE(BaseCMRetrievalDataset):
                 p_txt = self.get_random_secondary_tag(ds_idx, dtype='embedding')
 
             # ---setting negative word vector---
-            n_txt = self.word_embeddings[random.choice(self.get_negative_concepts(ds_idx))]
+            n_txt = self.word_embeddings[random.choice(self.negative_tag_matrix[ds_idx])]
 
             # ---setting positive image---
             positive_index = b_idx

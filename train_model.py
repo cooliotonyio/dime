@@ -18,7 +18,7 @@ from losses import InterTripletLoss
 batch_size = 128
 margin = 5
 lr = 1e-3
-n_epochs = 10
+n_epochs = 15
 output_embedding_size = 64
 feature_mode = 'resnet152'
 ##################

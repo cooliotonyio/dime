@@ -22,7 +22,7 @@ dataset = NUS_WIDE_KNN(data_path,
                                      transforms.Normalize(mean,std)]), feature_mode='resnet152', train=True)
 
 model = pickle.load(open("pickles/models/entire_nuswide_model_14.p", "rb"))
-relevancy_matrix = dataset.relevancy_matrix
+relevancy_matrix = dataset.concept_relevancy_matrix
 
 def MiAP(tag_rankings, q_indices):
     """
@@ -248,12 +248,12 @@ def display_metrics():
     base_loader, query_loader = make_loaders_text()
     tag_rankings, q_indices = faiss_similarity(model, base_loader, query_loader)
     miap = MiAP(tag_rankings, q_indices)
-    f1, overall_precision, overall_recall, class_precisions, class_recalls = f1_precision_recall(q_indices, tag_rankings, k=7)
+    f1, overall_precision, overall_recall, class_precisions, class_recalls = f1_precision_recall(q_indices, tag_rankings, k=5)
 
-    print("MiAP:", miap, "\n")
-    print("F1: ", np.nanmean(f1), "\n")
-    print("OVERALL PRECISION: ", overall_precision, "\n")
-    print("OVERALL RECALL: ", overall_recall, "\n")
+    print("MiAP:".ljust(20), miap, "\n")
+    print("F1: ".ljust(20), np.nanmean(f1), "\n")
+    print("OVERALL PRECISION: ".ljust(20), overall_precision, "\n")
+    print("OVERALL RECALL: ".ljust(20), overall_recall, "\n")
 
     print("______________________")
     print("PER CLASS PRECISION: ", "\n")
