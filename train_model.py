@@ -15,35 +15,40 @@ from networks import TextEmbeddingNet, Resnet152EmbeddingNet, IntermodalTripletN
 from losses import InterTripletLoss
 
 ### PARAMETERS ###
-batch_size = 512
+batch_size = 128
 margin = 5
 lr = 1e-3
-n_epochs = 10
+n_epochs = 15
 output_embedding_size = 64
 feature_mode = 'resnet152'
 ##################
 
 cuda = torch.cuda.is_available()
-mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
-
-print("Loading NUS_WIDE dataset...")
-data_path = './data/Flickr'
-dataset = NUS_WIDE(root=data_path,
-    transform=transforms.Compose([tv.transforms.Resize((224,224)), transforms.ToTensor(),
-                                 transforms.Normalize(mean,std)]), features=feature_mode)
-print("Done\n")
 
 # setting up dictionary
 print("Loading in word vectors...")
 text_dictionary = pickle.load(open("pickles/word_embeddings/word_embeddings_tensors.p", "rb"))
 print("Done\n")
 
+mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
+print("Loading NUS_WIDE dataset...")
+data_path = './data/Flickr'
+dataset = NUS_WIDE(root=data_path,
+                    transform=transforms.Compose([tv.transforms.Resize((224,224)),
+                                                    transforms.ToTensor(),
+                                                    transforms.Normalize(mean,std)]),
+                    feature_mode=feature_mode,
+                    word_embeddings=text_dictionary,
+                    train=True)
+print("Done\n")
+
+
 # creating indices for training data and validation data
 print("Making training and validation indices...")
 from torch.utils.data.sampler import SubsetRandomSampler
 
 dataset_size = len(dataset)
-validation_split = 0.3
+validation_split = 0.2
 
 indices = list(range(dataset_size))
 split = int(np.floor(validation_split * dataset_size))
@@ -76,6 +81,6 @@ optimizer = optim.Adam(model.parameters(), lr=lr)
 scheduler = lr_scheduler.StepLR(optimizer, 8, gamma=0.1, last_epoch=-1)
 
 log_interval = 100
-fit(i_triplet_train_loader, i_triplet_val_loader, dataset, model, loss_fn, optimizer, scheduler, n_epochs, cuda, log_interval, text_dictionary)
+fit(i_triplet_train_loader, i_triplet_val_loader, dataset.intermodal_triplet_batch_sampler, model, loss_fn, optimizer, scheduler, n_epochs, cuda, log_interval)
 
-pickle.dump(model, open('pickles/models/entire_nuswide_model_12.p', 'wb'))
+pickle.dump(model, open('pickles/models/entire_nuswide_model_14.p', 'wb'))
