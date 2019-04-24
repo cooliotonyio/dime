@@ -13,7 +13,8 @@ import json
 
 from search import SearchEngine
 
-FAST_TAG = pickle.load(open("pickles/word_embeddings/word_embeddings_tensors.p", "rb"))
+# FAST_TAG = pickle.load(open("pickles/word_embeddings/word_embeddings_tensors.p", "rb"))
+FAST_TAG = {'hello':123123}
 EMBEDDING_DIR = ""
 UPLOAD_DIR = "./uploads"
 DATA_DIR = "./data"
@@ -117,7 +118,7 @@ def search(target, modality, n=5):
         dis, idx = search_engine.search(embedding, index_key, n = n)
         result = {
             "index_key": index_key,
-            "dataset": index_key[0]
+            "dataset": index_key[0],
             "dis": [float(d) for d in dis],
             "idx": [int(i) for i in idx],
             "data": search_engine.data_from_idx(index_key, idx),
