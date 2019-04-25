@@ -2,6 +2,7 @@ from flask import Flask, render_template, request
 from werkzeug.utils import secure_filename
 import requests
 import os
+import traceback
 
 app = Flask(__name__)
 
@@ -21,38 +22,54 @@ def query(modality):
     if request.method == "POST":
         try:
             data = {}
-            data["num_results"] = request.values["num_results"]
+            if "num_results" in request.values:
+                data["num_results"] = request.values["num_results"]
+            else:
+                data["num_results"] = 30
+
             query_url = ENGINE_URL + "/query/" + modality
-                
+
             if "text" == modality:
                 query_input = request.values["text"]
                 data["text"] = request.values["text"]
                 r = requests.post(query_url, data = data)
             elif "image" == modality:
-                query_input = ENGINE_URL + "/uploads/" + f.filename
                 if "file" in request.files:
                     f = request.files["file"]
                     if f.filename and allowed_file(f.filename):
+                        query_input = ENGINE_URL + "/uploads/" + f.filename
                         files = {"file": (f.filename, f)}
                         r = requests.post(query_url, files = files, data = data)
+                    else:
+                        return "Filename '{}' not supported".format(f.filename)
+                else:
+                    return "File not found"
             elif "dataset" == modality:
-                query_input = request.args["query_input"]
-                data["dataset"] = request.args["dataset"]
-                data["target"] = request.args["target"]
+                query_input = request.values["query_input"]
+                data["dataset"] = request.values["dataset"]
+                data["target"] = request.values["target"]
                 r = requests.post(query_url, data = data)
             else:
                 return "Modality '{}' not supported".format(modality)
+
             # Parse results from JSON
             results = r.json()
+            for result in results:
+                if result["modality"] == "text":
+                    tags = result["data"]
+            results = [r for r in results if r["modality"] != "text"]
             return render_template("results.html", 
                 modality=modality, 
                 query_input=query_input, 
                 results = results, 
+                tags = tags,
                 num_datasets = len(results), 
                 num_results = data["num_results"],
                 engine_url = ENGINE_URL)
-        except JSONDecodeError as e:
-            return str(results)
+        except Exception as err:
+            traceback.print_tb(err.__traceback__)
+            print(str(err))
+            return str(err)
     elif request.method == "GET":
         return home()
     else:

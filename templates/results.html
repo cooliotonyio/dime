@@ -22,10 +22,15 @@
       {% if modality == "image" %}
         <img height="100" src="{{query_input}}">
       {% endif %}
+      {% if modality == "dataset" %}
+        <img height="100" src="{{query_input}}">
+      {% endif %}
     </div>
     <div class="col-4 text-center">
       <h4>Relevant Tags:</h4>
-      cat, dog, etc
+        {% for tag in tags %}
+          {{tag}}, 
+        {% endfor%}
   </div>
 </div>
 
@@ -35,9 +40,11 @@
     <h1 class="pt-5">Results:</h1>
     <ul class="nav nav-tabs" id="myTab" role="tablist">
     {% for result in results %}
+      {% if result["modality"] == "image" %}
       <li class="nav-item">
-        <a class="nav-link {% if loop.index0 == 0 %} active {% endif %}" id="results_{{loop.index0}}-tab" data-toggle="tab" href="#results_{{loop.index0}}" role="tab" aria-controls="results_{{loop.index0}}" aria-selected="true">{{result[0]}}</a>
+        <a class="nav-link {% if loop.index0 == 0 %} active {% endif %}" id="results_{{loop.index0}}-tab" data-toggle="tab" href="#results_{{loop.index0}}" role="tab" aria-controls="results_{{loop.index0}}" aria-selected="true">{{result["dataset"]}}</a>
       </li>
+      {% endif %}
     {% endfor %}
     </ul>
   </div>
@@ -45,34 +52,32 @@
 
 <div class="tab-content" id="myTabContent">
 {% for result in results %}
+  {% if result["modality"] == "image" %}
   <div class="tab-pane fade {% if loop.index0 == 0 %} show active {% endif %}" id="results_{{loop.index0}}" role="tabpanel" aria-labelledby="results_{{loop.index0}}-tab">
     <div class="row px-5">
       {% for j in range(result["num_results"])%}
-      <div class="col">
-        {% if result["modality"] == "image" %}
+      <div class="col-2">
+        <a target="_blank" href="{{engine_url}}/{{result['data'][j]}}">
           <img class="w-100" src="{{engine_url}}/{{result['data'][j]}}">
-        {% endif %}
-        {% if results["modality"] == "text" %}
-          {{result['data'][j]}}
-        {% endif %}
+        </a>
         <br>
         <div>
-          Distance: {{result['distance'][j]}}
+          Distance: {{result['dis'][j]}}
         </div>
-        <a 
-          role="button" 
-          class="btn btn-primary" 
-          href="/query/index/?
-          query_input={{engine_url}}/{{result['data'][j]}}
-          index={{result['index_key']}}
-          target={{result['idx'][j]}}'">
-          Similar
-        </a>           
+        <form action="/query/dataset" method="POST">
+          <div class="form-group d-none">
+            <input name="query_input" class="form-control" id="query_input_input" type="text" value="{{engine_url}}/{{result['data'][j]}}">
+            <input name="dataset" class="form-control" id="dataset_input" type="text" value="{{result['dataset']}}">
+            <input name="target" class="form-control" id="target_input" type="text" value="{{result['idx'][j]}}">
+          </div>
+          <button type="submit" class="btn btn-primary">Similar</button>
+        </form>        
       </div>
       {% endfor %}
     </div>
 
   </div>
+  {% endif %}
 {% endfor %}
 </div>
 {% endblock %}
