@@ -20,9 +20,17 @@ class EmbeddingModel():
         self.cuda = cuda
         if self.cuda:
             self.net.cuda()
+        else:
+            self.net.cpu()
     
     def get_embedding(self, tensor):
         return self.net.get_embedding(tensor)
+    
+    def to_cuda(self):
+        return self.net.cuda()
+    
+    def to_cpu(self):
+        return self.cpu.cuda()
 
 class Dataset():
     '''
@@ -164,7 +172,7 @@ class SearchEngine():
         
     '''
 
-    def __init__(self, modalities, cuda = None, save_directory = None, verbose = False):
+    def __init__(self, modalities, cuda = False, save_directory = None, verbose = False):
         '''
         Initializes SearchEngine object
         

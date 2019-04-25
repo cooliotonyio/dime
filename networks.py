@@ -31,11 +31,11 @@ class EmbeddingNet(nn.Module):
             my_embedding.copy_(o.data)
 
         h = self.convnet_layer.register_forward_hook(copy_data)
-
         self.convnet(x)
         h.remove()
 
         my_embedding = my_embedding.view(my_embedding.size()[0], -1)
+        self.fc.cuda()
         output = self.fc(my_embedding)
         return output
 

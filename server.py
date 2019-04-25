@@ -3,7 +3,6 @@ from flask import Flask, request, redirect, url_for, send_from_directory, jsonif
 from werkzeug.utils import secure_filename
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
-from torch.cuda import is_available
 from torch.utils.data import DataLoader
 
 import PIL
@@ -35,6 +34,10 @@ def init_engine(app):
         return text_net.text_embedding_net(data[0])
     text_net.get_embedding = get_text_embedding
     image_net = pickle.load(open("pickles/models/entire_nuswide_model.p", "rb"))
+    text_net.cpu()
+    text_net.eval()
+    image_net.cpu()
+    image_net.eval()
 
     # Build Datasets
     print("Building datasets...")
@@ -55,16 +58,13 @@ def init_engine(app):
     # Build DataLoaders
     print("Building dataloaders...")
     batch_size = 128
-    cuda = is_available()
-    kwargs = {'num_workers': 4, 'pin_memory': True} if cuda else {}
-    from torch.utils.data import DataLoader
-    image_dataloader = DataLoader(image_data, batch_size = batch_size, **kwargs)
-    text_dataloader = DataLoader(text_data, batch_size = batch_size, **kwargs)
+    image_dataloader = DataLoader(image_data, batch_size = batch_size)
+    text_dataloader = DataLoader(text_data, batch_size = batch_size)
 
     #Building SearchEngine
     print("Building search engine")
     save_directory = './embeddings'
-    search_engine = SearchEngine(["text", "image"], cuda = cuda, save_directory = save_directory, verbose = True)
+    search_engine = SearchEngine(["text", "image"], save_directory = save_directory, verbose = True)
     search_engine.add_model(text_net, "text_net", "text", (300,) , 30)
     search_engine.add_model(image_net, "image_net", "image", (3, 224, 224), 30)
     search_engine.add_dataset("wiki_word2vec", text_dataloader, text_from_idx, "text", (300,))
@@ -91,7 +91,7 @@ def target_to_tensor(target, modality):
             transforms.Resize((224,224)),
             transforms.ToTensor(),
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
-        tensor = image_transform(image).detach().to("cuda")
+        tensor = image_transform(image).detach().to("cpu")
     elif "dataset" == modality:
         dataset_name, idx = target
         assert dataset_name in search_engine.datasets, "Target dataset '{}' not a valid dataset".format(dataset_name)
@@ -106,15 +106,16 @@ def search(target, modality, n=5):
     print("NEW SEARCH")
     search_engine = app.search_engine
     tensor, modality = target_to_tensor(target, modality)
+    model_name = search_engine.valid_models(tensor, modality)[0]
+    model = search_engine.models[model_name]
     print("Modality:\t", modality)
     print("Tensor:   \t", tensor.shape)
-    print("Target:  \t", target)
-    model_name = search_engine.valid_models(tensor, modality)[0]
+    print("Target:   \t '{}'".format(target))
     print("Model:   \t", model_name)
     if modality == "image":
         #TODO: Make this less dumb
         tensor = tensor[None,:,:,:]
-    embedding = search_engine.models[model_name].get_embedding(tensor)
+    embedding = model.get_embedding(tensor)
     if modality == "image":
         #TODO: Make this less dumb
         embedding = embedding[0]
