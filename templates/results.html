@@ -13,30 +13,30 @@
     <br>
     <br>
     <a class="btn btn-primary pt-3" role="button" href="/">Search Another</a>
-    </div>
-    <div class="col-4 text-center">
-      <h4>Input:</h4>
-      {% if modality == "text" %}
-        {{query_input}}
-      {% endif %}
-      {% if modality == "image" %}
-        <img height="100" src="{{query_input}}">
-      {% endif %}
-      {% if modality == "dataset" %}
-        <img height="100" src="{{query_input}}">
-      {% endif %}
-    </div>
-    <div class="col-4 text-center">
-      <h4>Relevant Tags:</h4>
-        {% for tag in tags %}
-          {{tag}}, 
-        {% endfor%}
+  </div>
+  <div class="col-4 text-center">
+    <h4>Input:</h4>
+    {% if modality == "text" %}
+      {{query_input}}
+    {% endif %}
+    {% if modality == "image" %}
+      <img height="100" src="{{query_input}}">
+    {% endif %}
+    {% if modality == "dataset" %}
+      <img height="100" src="{{query_input}}">
+    {% endif %}
+  </div>
+  <div class="col-4 text-center">
+    <h4>Relevant Tags:</h4>
+    {% for tag in tags %}
+      {{tag}}, 
+    {% endfor%}
   </div>
 </div>
 
 
 <div class="row justify-content-center">
-  <div class="col-8 text-center">
+  <div class="col-3 text-center">
     <h1 class="pt-5">Results:</h1>
     <ul class="nav nav-tabs" id="myTab" role="tablist">
     {% for result in results %}
@@ -48,9 +48,13 @@
     {% endfor %}
     </ul>
   </div>
+  <div class="col-6">
+    <canvas id="chart"></canvas>
+  </div>
 </div>
 
-<div class="tab-content" id="myTabContent">
+
+<div class="tab-content pt-5" id="myTabContent">
 {% for result in results %}
   {% if result["modality"] == "image" %}
   <div class="tab-pane fade {% if loop.index0 == 0 %} show active {% endif %}" id="results_{{loop.index0}}" role="tabpanel" aria-labelledby="results_{{loop.index0}}-tab">
@@ -80,4 +84,50 @@
   {% endif %}
 {% endfor %}
 </div>
+
+<!-- JS Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0/dist/Chart.min.js"></script>
+<script>
+  
+  console.log({{ results[0]["dis"] }});
+
+  var data = {
+    labels: Array.from({length: {{num_results}}}, (v, k) => k+1),
+    datasets: [{
+      label: "nus-wide",
+      backgroundColor: "rgba(255,99,132,0.2)",
+      borderColor: "rgba(255,99,132,1)",
+      borderWidth: 2,
+      hoverBackgroundColor: "rgba(255,99,132,0.4)",
+      hoverBorderColor: "rgba(255,99,132,1)",
+      data: {{ results[0]["dis"] }},
+    }]
+  };
+
+  var options = {
+    maintainAspectRatio: false,
+    scales: {
+      yAxes: [{
+        stacked: true,
+        gridLines: {
+          display: true,
+          color: "rgba(255,99,132,0.2)"
+        }
+      }],
+      xAxes: [{
+        gridLines: {
+          display: false
+        }
+      }]
+    }
+  };
+
+
+  var myChart = Chart.Bar('chart', {
+    options: options,
+    data: data
+  });
+  
+</script>
 {% endblock %}
+
