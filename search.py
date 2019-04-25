@@ -347,6 +347,8 @@ class SearchEngine():
     def data_from_idx(self, dataset_name, indicies):
         if type(dataset_name) == tuple and len(dataset_name) == 3:
             dataset_name = dataset_name[0]
+        if type(indicies) == int:
+            indicies = [indicies]
         dataset = self.datasets[dataset_name]
         return [dataset.data[i] for i in indicies]
      

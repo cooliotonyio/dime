@@ -17,10 +17,10 @@
     <div class="col-4 text-center">
       <h4>Input:</h4>
       {% if modality == "text" %}
-        {{input}}
+        {{query_input}}
       {% endif %}
       {% if modality == "image" %}
-        <img height="100" src="{{input}}">
+        <img height="100" src="{{query_input}}">
       {% endif %}
     </div>
     <div class="col-4 text-center">

@@ -9,12 +9,13 @@ from torch.utils.data import DataLoader
 import PIL
 import pickle
 import os
+import traceback
 import json
 
 from search import SearchEngine
 
-# FAST_TAG = pickle.load(open("pickles/word_embeddings/word_embeddings_tensors.p", "rb"))
-FAST_TAG = {'hello':123123}
+FAST_TAG = pickle.load(open("pickles/word_embeddings/word_embeddings_tensors.p", "rb"))
+# FAST_TAG = {i:"hi" for i in range(10000000)}
 EMBEDDING_DIR = ""
 UPLOAD_DIR = "./uploads"
 DATA_DIR = "./data"
@@ -91,21 +92,25 @@ def target_to_tensor(target, modality):
             transforms.ToTensor(),
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
         tensor = image_transform(image).detach().to("cuda")
-    elif "index" == modality:
-        index_key, idx = json.dump(target)
-        assert len(index_key) == 3, "Target {} not a valid index_key".format(target)
-        assert index_key in search_engine.indexes, "Target {} not a valid index_key".format(target)
-        new_target = search_engine.data_from_idx(index_key, [idx])[0]
-        new_modality = search_engine.dataset[index_key[0]].modality
+    elif "dataset" == modality:
+        dataset_name, idx = target
+        assert dataset_name in search_engine.datasets, "Target dataset '{}' not a valid dataset".format(dataset_name)
+        new_target = search_engine.data_from_idx(dataset_name, idx)[0]
+        new_modality = search_engine.datasets[dataset_name].modality
         tensor, modality = target_to_tensor(new_target, new_modality)
+    else:
+        raise ValueError("Modality '{}' not supported".format(modality))
     return tensor, modality
 
 def search(target, modality, n=5):
+    print("NEW SEARCH")
     search_engine = app.search_engine
     tensor, modality = target_to_tensor(target, modality)
-    print("SHAPE:   \t", tensor.shape)
-    print("MODALITY:\t", modality)
+    print("Modality:\t", modality)
+    print("Tensor:   \t", tensor.shape)
+    print("Target:  \t", target)
     model_name = search_engine.valid_models(tensor, modality)[0]
+    print("Model:   \t", model_name)
     if modality == "image":
         #TODO: Make this less dumb
         tensor = tensor[None,:,:,:]
@@ -113,20 +118,22 @@ def search(target, modality, n=5):
     if modality == "image":
         #TODO: Make this less dumb
         embedding = embedding[0]
-    results = []
+    all_results = []
     for index_key in search_engine.valid_indexes(embedding):
         dis, idx = search_engine.search(embedding, index_key, n = n)
         result = {
-            "index_key": index_key,
             "dataset": index_key[0],
+            "model": index_key[1],
+            "is_binarized": index_key[2],
             "dis": [float(d) for d in dis],
             "idx": [int(i) for i in idx],
-            "data": search_engine.data_from_idx(index_key, idx),
+            "data": [str(x) for x in search_engine.data_from_idx(index_key, idx)],
             "modality": search_engine.datasets[index_key[0]].modality,
             "num_results": n
         }
-        results.append(result)
-    return results
+        all_results.append(result)
+    print("SEARCH FINISHED, RETURNING {} RESULTS FOR {} DATASETS".format(n, len(all_results)))
+    return all_results
             
 @app.route('/uploads/<path:filename>')
 def uploads(filename):
@@ -136,14 +143,15 @@ def uploads(filename):
 def data(filename):
     return send_from_directory(DATA_DIR, filename, as_attachment=True)
 
-@app.route('/query/<modality>', methods=['POST','GET'])
+@app.route('/query/<modality>', methods=["POST"])
 def query(modality):
     try:
-        if modality == "text":
-            target = request.form["text"]
-        elif modality == "image":
-            if 'file' in request.files:
-                f = request.files['file']
+        # Determine modality and target
+        if "text" == modality:
+            target = request.values["text"]
+        elif "image" == modality:
+            if "file" in request.files:
+                f = request.files["file"]
                 if f.filename and allowed_file(f.filename):
                     target = os.path.join(UPLOAD_DIR, secure_filename(f.filename))
                     f.save(target)
@@ -151,12 +159,25 @@ def query(modality):
                     raise RuntimeError("Filename '{}' not allowed".format(str(f.filename)))
             else:
                 raise RuntimeError("No file attached to request")
+        elif "dataset" == modality:
+            target = [request.values["dataset"], int(request.values["target"])]
         else:
             raise RuntimeError("Modality '{}' not supported".format(modality))
-        results = search(target, modality, n=20)
+        
+        # Figure out how many results
+        if "num_results" in request.values:
+            num_results = int(request.values["num_results"])
+        else:
+            num_results = 10
+        
+        # Search and return results
+        results = search(target, modality, n=num_results)
         return jsonify(results)
-    except Exception as e:
-        return e.message
+    
+    except Exception as err:
+        traceback.print_tb(err.__traceback__)
+        print(str(err))
+        return "Query Error: {}".format(str(err))
     
 if __name__ == "__main__":
     init_engine(app)
