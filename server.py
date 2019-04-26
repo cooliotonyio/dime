@@ -10,6 +10,7 @@ import pickle
 import os
 import traceback
 import json
+import logging
 
 from search import SearchEngine
 
@@ -21,6 +22,7 @@ DATA_DIR = "./data"
 ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif'])
 
 app = Flask(__name__)
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -67,12 +69,12 @@ def init_engine(app):
     search_engine = SearchEngine(["text", "image"], save_directory = save_directory, verbose = True)
     search_engine.add_model(text_net, "text_net", "text", (300,) , 30)
     search_engine.add_model(image_net, "image_net", "image", (3, 224, 224), 30)
-    search_engine.add_dataset("wiki_word2vec", text_dataloader, text_from_idx, "text", (300,))
+    search_engine.add_dataset("fast_tag", text_dataloader, text_from_idx, "text", (300,))
     search_engine.add_dataset("nus-wide", image_dataloader, image_from_idx, "image", (3, 224, 224))
 
     #Build Indexes
     print("Building Indexes")
-    search_engine.build_index("wiki_word2vec")
+    search_engine.build_index("fast_tag")
     search_engine.build_index("nus-wide")
 
     #Finished
@@ -108,10 +110,10 @@ def search(target, modality, n=5):
     tensor, modality = target_to_tensor(target, modality)
     model_name = search_engine.valid_models(tensor, modality)[0]
     model = search_engine.models[model_name]
-    print("Modality:\t", modality)
-    print("Tensor:   \t", tensor.shape)
-    print("Target:   \t '{}'".format(target))
-    print("Model:   \t", model_name)
+    print(" -> Modality:    \t", modality)
+    print(" -> Tensor Shape:\t", tensor.shape)
+    print(" -> Target:      \t '{}'".format(target))
+    print(" -> Model:       \t", model_name)
     if modality == "image":
         # TODO: Make this less dumb
         tensor = tensor[None,:,:,:]
