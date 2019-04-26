@@ -65,7 +65,7 @@ def query(modality):
                 query_input = query_input, 
                 results = results, 
                 tags = tags,
-                num_datasets = len(results), 
+                num_datasets = response["num_sets"], 
                 num_results = response["num_results"],
                 engine_url = ENGINE_URL)
         except Exception as err:
