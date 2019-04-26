@@ -53,7 +53,8 @@ def query(modality):
                 return "Modality '{}' not supported".format(modality)
 
             # Parse results from JSON
-            results = r.json()
+            response = r.json()
+            results = response["results"]
             for result in results:
                 if result["modality"] == "text":
                     tags = result["data"]

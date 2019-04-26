@@ -113,12 +113,11 @@ def search(target, modality, n=5):
     print("Target:   \t '{}'".format(target))
     print("Model:   \t", model_name)
     if modality == "image":
-        #TODO: Make this less dumb
+        # TODO: Make this less dumb
         tensor = tensor[None,:,:,:]
-    embedding = model.get_embedding(tensor)
-    if modality == "image":
-        #TODO: Make this less dumb
-        embedding = embedding[0]
+        embedding = model.get_embedding(tensor)[0]
+    else:
+        embedding = model.get_embedding(tensor)
     all_results = []
     for index_key in search_engine.valid_indexes(embedding):
         dis, idx = search_engine.search(embedding, index_key, n = n)
@@ -134,7 +133,7 @@ def search(target, modality, n=5):
         }
         all_results.append(result)
     print("SEARCH FINISHED, RETURNING {} RESULTS FOR {} DATASETS".format(n, len(all_results)))
-    return all_results
+    return all_results, modality
             
 @app.route('/uploads/<path:filename>')
 def uploads(filename):
@@ -172,8 +171,14 @@ def query(modality):
             num_results = 10
         
         # Search and return results
-        results = search(target, modality, n=num_results)
-        return jsonify(results)
+        results, modality = search(target, modality, n=num_results)
+        response = {
+            "input_target": target,
+            "input_modality": modality,
+            "num_sets": len(results),
+            "results": results
+        }
+        return jsonify(response)
     
     except Exception as err:
         traceback.print_tb(err.__traceback__)
