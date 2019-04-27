@@ -2,7 +2,7 @@ import numpy as np
 import pickle
 
 relevancy_matrix = pickle.load(open('pickles/nuswide_metadata/relevancy_matrix.p', 'rb'))
-fname = "nuswide_metadata/Concepts81.txt"
+fname = "data/nuswide_metadata/Concepts81.txt"
 
 with open(fname) as f:
     idx_to_concept = f.readlines()
