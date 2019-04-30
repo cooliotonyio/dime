@@ -178,6 +178,7 @@ def query(modality):
             "input_target": target,
             "input_modality": modality,
             "num_sets": len(results),
+            "num_results": num_results,
             "results": results
         }
         return jsonify(response)
