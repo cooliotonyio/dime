@@ -1,38 +1,5 @@
 {% extends "_template.html" %}
 
-{% block content1 %}
-
-<div class="tab-content pt-5" id="myTabContent">
-{% for result in results %}
-  {% if result["modality"] == "image" %}
-  <div class="tab-pane fade {% if loop.index0 == 0 %} show active {% endif %}" id="results_{{loop.index0}}" role="tabpanel" aria-labelledby="results_{{loop.index0}}-tab">
-    <div class="row px-5">
-      {% for j in range(result["num_results"])%}
-      <div class="col-2">
-        <a target="_blank" href="{{engine_url}}/{{result['data'][j]}}">
-          <img class="w-100" src="{{engine_url}}/{{result['data'][j]}}">
-        </a>
-        <br>
-        <div>
-          Distance: {{result['dis'][j]}}
-        </div>
-        <form action="/query/dataset" method="POST">
-          <div class="form-group d-none">
-            <input name="query_input" class="form-control" id="query_input_input" type="text" value="{{engine_url}}/{{result['data'][j]}}">
-            <input name="dataset" class="form-control" id="dataset_input" type="text" value="{{result['dataset']}}">
-            <input name="target" class="form-control" id="target_input" type="text" value="{{result['idx'][j]}}">
-          </div>
-          <button type="submit" class="btn btn-primary">Similar</button>
-        </form>        
-      </div>
-      {% endfor %}
-    </div>
-
-  </div>
-  {% endif %}
-{% endfor %}
-</div>
-{% endblock %}
 
 {% block content%}
 <div id="content"></div>

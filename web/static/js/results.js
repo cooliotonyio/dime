@@ -1,5 +1,95 @@
 'use strict';
 
+class Image extends React.Component {
+  constructor(props) {
+    super(props);
+  }
+
+  render () {
+    return (
+      <div className="col-2">
+        <img 
+          className="w-100" 
+          src={this.props.source}
+          onClick ={(event) => this.props.clickHandler(this.props)}>
+        </img>
+        <p>Distance = {this.props.distance}</p>
+      </div>
+    )
+  }
+}
+
+class Modal extends React.Component {
+  constructor(props) {
+    super(props);
+    this.createMetadata = this.createMetadata.bind(this);
+    this.createActions = this.createActions.bind(this);
+  }
+
+  createMetadata(data) {
+    return (
+      <div id="modalMetadata">
+        <h2>Metadata</h2>
+        <h5>Distance: {data.distance}</h5>
+        <h5>Dataset: {data.dataset}</h5>
+        <h5>Binarized: {data.binarized.toString()}</h5>
+        <h5>Index: {data.idx}</h5>
+        <h5>Model: {data.model}</h5>
+        <h5>Source: <a href={data.source}>{data.source}</a></h5>
+      </div>
+    )
+  }
+
+  createActions(data) {
+    return (
+      <div id="modalActions">
+        <h2>Actions</h2>
+        <form action="/query/dataset" method="POST">
+          <div className="form-group d-none">
+            <input name="query_input" type="text" value={data.source} readOnly/>
+            <input name="dataset"  type="text" value={data.dataset} readOnly/>
+            <input name="target"  type="text" value={data.idx} readOnly/>
+            <input name="model" type="text" value={data.model} readOnly/>
+            <input name="binarized" type="text" value={data.model ? 1 : 0} readOnly/>
+            <input name="num_results" type="text" value={this.props.num_results} readOnly/>
+          </div>
+          <button type="submit" className="btn btn-primary">Use As Query</button>
+        </form> 
+        <button className="btn btn-warning" 
+          onClick={(event)=>this.props.clickHandler()}>
+          Close Modal</button>
+      </div>
+    )
+  }
+
+  render() {
+    if (this.props.show){
+      var data = this.props.data;
+      return (
+        <div id="modal" className="result-modal d-block">
+          <div className="result-modal-body">
+            <div className="row w-100 my-5 justify-content-center">
+              <div className="col-8 text-center">
+                <img src={data.source}></img>
+              </div>
+            </div>
+            <div className="row w-100 my-5 justify-content-center">
+              <div className="col-3">
+                {this.createActions(data)}
+              </div>
+              <div className="col-5">
+                {this.createMetadata(data)}
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    } else {
+      return(<div id="modal" className="result-modal d-none"></div>);
+    }
+  }
+}
+
 class Header extends React.Component {
   constructor(props) {
     super(props);
@@ -30,7 +120,6 @@ class Header extends React.Component {
   }
 
   render() {
-    console.log("Rendering header...");
     var input_modality = this.props.data.input_modality;
     var query_input = this.create_query_input();
     var tags = this.create_tags();
@@ -113,11 +202,38 @@ class ResultsHeader extends React.Component {
 }
 
 class ResultsBody extends React.Component {
+  constructor(props) {
+    super(props);
+    this.createResults = this.createResults.bind(this);
+  }
+
+  createResults(){
+    var dataset = this.props.dataset;
+    let results = []
+    for (var i = 0; i < dataset.num_results; i++){
+      results.push(
+        <Image 
+          key={i}
+          source={this.props.url + "/" + dataset.data[i]}
+          distance={dataset.dis[i]}
+          idx={dataset.idx[i]}
+          dataset={dataset.dataset}
+          model={dataset.model}
+          binarized={dataset.is_binarized}
+          clickHandler={this.props.clickHandler}>
+        </Image>
+      )        
+    }
+    
+    return results
+  }
+
   render() {
     return (
       <div id="resultsBody">
-        <h1>Body</h1>
-        <h4>{JSON.stringify(this.props.value)}</h4>
+        <div className="row px-5 pt-5">
+          {this.createResults()}
+        </div>
       </div>
     )
   }
@@ -137,32 +253,62 @@ class Results extends React.Component{
   }
 
   changeDatasetHandler (dataset) {
-    console.log(dataset);
     this.setState({
       "dataset" : dataset
     });
   }
 
   render() {
-    console.log("Rendering results...")
     return (
       <div id="results">
         <ResultsHeader 
-          datasets={this.props.data.results} 
-          currentDataset={this.state.dataset}
-          changeDatasetHandler={this.changeDatasetHandler}/>
-        <ResultsBody value={this.state.dataset}/>
+          datasets = {this.props.data.results} 
+          currentDataset = {this.state.dataset}
+          changeDatasetHandler = {this.changeDatasetHandler}/>
+        <ResultsBody 
+          dataset = {this.state.dataset}
+          url = {this.props.data.engine_url}
+          clickHandler = {this.props.clickHandler}/>
       </div>
     )
   }
 }
 class Content extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      data: JSON.parse(this.props.data),
+      modal: null,
+      show: false
+    }
+    this.showModal = this.showModal.bind(this);
+    this.hideModal = this.hideModal.bind(this);
+  }
+
+  showModal(data){
+    this.setState({
+      show: true,
+      modal: data
+    })
+  }
+
+  hideModal(){
+    this.setState({show: false})
+  }
+
   render() {
-    var data = JSON.parse(this.props.data);
     return (
       <div>
-        <Header data={data}></Header>
-        <Results data={data}></Results>
+        <Header 
+          data={this.state.data}/>
+        <Results 
+          data={this.state.data} 
+          clickHandler={this.showModal}/>
+        <Modal 
+          show={this.state.show} 
+          data={this.state.modal} 
+          num_results={this.state.data.num_results}
+          clickHandler={this.hideModal}/>
       </div>
     );
   }

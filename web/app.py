@@ -36,8 +36,13 @@ def make_request(request, modality):
             return "File not found"
     elif "dataset" == modality:
         query_input = request.values["query_input"]
-        data["dataset"] = request.values["dataset"]
-        data["target"] = request.values["target"]
+        data = {
+            "dataset": request.values["dataset"],
+            "target": request.values["target"],
+            "model": request.values["model"],
+            "binarized": request.values["binarized"],
+            "num_results": request.values["num_results"]
+        }
         r = requests.post(query_url, data = data)
     else:
         return "Modality '{}' not supported".format(modality)
