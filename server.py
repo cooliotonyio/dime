@@ -82,8 +82,8 @@ def init_engine(app):
 def target_to_tensor(target, modality):
     search_engine = app.search_engine
     if "text" == modality:
-        if target in FAST_TAG:
-            tensor = FAST_TAG[target]
+        if target in FAST_TEXT:
+            tensor = FAST_TEXT[target]
         else:
             raise KeyError("No tensor representation of '{}' in text dataset".format(str(target)))
     elif "image" == modality:
