@@ -3,6 +3,7 @@ from werkzeug.utils import secure_filename
 import requests
 import os
 import traceback
+import json
 
 app = Flask(__name__)
 
@@ -55,19 +56,15 @@ def query(modality):
     if request.method == "POST":
         try:
             response, query_input = make_request(request, modality)
-            results = response["results"]
-            for result in results:
-                if result["modality"] == "text":
-                    tags = result["data"]
-            results = [r for r in results if r["modality"] != "text"]
-            return render_template("results.html", 
-                modality = response["input_modality"], 
-                query_input = query_input, 
-                results = results, 
-                tags = tags,
-                num_datasets = response["num_sets"], 
-                num_results = response["num_results"],
-                engine_url = ENGINE_URL)
+            data = {
+                "input_modality": response["input_modality"],
+                "query_input": query_input,
+                "results": response["results"],
+                "num_datasets": response["num_sets"],
+                "num_results": response["num_results"],
+                "engine_url": ENGINE_URL
+            }
+            return render_template("results.html", data = json.dumps(data))
         except Exception as err:
             traceback.print_tb(err.__traceback__)
             print(str(err))
@@ -82,5 +79,7 @@ if __name__ == "__main__":
     print("ENGINE_URL: ",ENGINE_URL)
     app.run(
         host=os.getenv("LISTEN", "0.0.0.0"),
-        port=int(os.getenv("PORT", "80"))
+        port=int(os.getenv("PORT", "80")),
+        debug=True, 
+        use_reloader=True
     )

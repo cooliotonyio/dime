@@ -1,6 +1,6 @@
 {% extends "_template.html" %}
 
-{% block content %}
+{% block content1 %}
 <div class="row justify-content-center">
   <div class="col-8 text-center">
     <h1 class="pt-5">Query:</h1>
@@ -50,7 +50,6 @@
   </div>
 </div>
 
-
 <div class="tab-content pt-5" id="myTabContent">
 {% for result in results %}
   {% if result["modality"] == "image" %}
@@ -81,8 +80,20 @@
   {% endif %}
 {% endfor %}
 </div>
+{% endblock %}
 
-<!-- JS Scripts -->
+{% block content%}
+<div id="content"></div>
+{% endblock %}
+
+{% block scripts %}
+<script type="text/jsx" src="{{url_for('static', filename='js/results.js')}}"></script>
+<script type="text/jsx">
+  var element = <Content data="{{data}}"/>
+  ReactDOM.render(element, document.getElementById("content"));
+</script>
+{% endblock %}
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0/dist/Chart.min.js"></script>
 <script>
   
@@ -126,5 +137,5 @@
   });
   
 </script>
-{% endblock %}
+
 
