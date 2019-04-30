@@ -1,10 +1,6 @@
 'use strict';
 
 class Image extends React.Component {
-  constructor(props) {
-    super(props);
-  }
-
   render () {
     return (
       <div className="col-2">
@@ -85,7 +81,7 @@ class Modal extends React.Component {
         </div>
       )
     } else {
-      return(<div id="modal" className="result-modal d-none"></div>);
+      return(<div id="modal" className="result-modal d-none"></div>)
     }
   }
 }
@@ -112,7 +108,7 @@ class Header extends React.Component {
       var result = this.props.data.results[i];
       if (result.modality == "text") {
         for (var j = 0; j < result.num_results; j++) {
-          tags = tags + result.data[j] + ", "
+          tags = tags + result.data[j] + ", ";
         }
       }
     }
@@ -120,9 +116,6 @@ class Header extends React.Component {
   }
 
   render() {
-    var input_modality = this.props.data.input_modality;
-    var query_input = this.create_query_input();
-    var tags = this.create_tags();
     return (
       <div id="header">
         <div className="row justify-content-center">
@@ -132,16 +125,16 @@ class Header extends React.Component {
         </div>
         <div className="row justify-content-center">
           <div className="col-1 text-center">
-            <h4>Modality:</h4> {input_modality}<br/>
+            <h4>Modality:</h4> {this.props.data.input_modality}<br/>
             <a className="btn btn-primary pt-3" role="button" href="/">Search Another</a>
           </div>
           <div className="col-4 text-center">
             <h4>Input:</h4>
-            <div dangerouslySetInnerHTML={{__html: query_input}}></div>
+            {this.create_query_input()}
           </div>
           <div className="col-4 text-center">
             <h4>Relevant Tags:</h4>
-            {tags}
+            {this.create_tags()}
           </div>
         </div>
       </div>
@@ -164,19 +157,21 @@ class ResultsHeader extends React.Component {
     let tabs = [];
     for (var i = 0; i < this.props.datasets.length; i++){
       let dataset = this.props.datasets[i];
-      if (dataset.dataset === this.props.currentDataset.dataset) {
-        var button_class = "btn btn-primary"
-      } else {
-        var button_class = "btn btn-secondary"
+      if (dataset.modality != "text"){
+        if (dataset.dataset === this.props.currentDataset.dataset) {
+          var button_class = "btn btn-primary";
+        } else {
+          var button_class = "btn btn-secondary";
+        }
+        tabs.push(
+          <button 
+            key = {i}
+            type="button" 
+            className={button_class} 
+            onClick ={(event)=>{this.changeDataset(dataset)}}>
+            {dataset.dataset} with {dataset.model}
+          </button>);
       }
-      tabs.push(
-        <button 
-          key = {i}
-          type="button" 
-          className={button_class} 
-          onClick ={(event)=>{this.changeDataset(dataset)}}>
-          {dataset.dataset} with {dataset.model}
-        </button>)
     }
     return tabs
   }
@@ -209,7 +204,7 @@ class ResultsBody extends React.Component {
 
   createResults(){
     var dataset = this.props.dataset;
-    let results = []
+    let results = [];
     for (var i = 0; i < dataset.num_results; i++){
       results.push(
         <Image 
@@ -222,9 +217,8 @@ class ResultsBody extends React.Component {
           binarized={dataset.is_binarized}
           clickHandler={this.props.clickHandler}>
         </Image>
-      )        
+      );        
     }
-    
     return results
   }
 
@@ -241,15 +235,14 @@ class ResultsBody extends React.Component {
 class Results extends React.Component{
   constructor(props) {
     super(props);
+    this.changeDatasetHandler = this.changeDatasetHandler.bind(this);
     for (var i = 0; i < this.props.data.num_datasets; i++) {
       var dataset = this.props.data.results[i];
       if (dataset.modality == "image") {
-        this.state = {"dataset": dataset}
+        this.state = {"dataset": dataset};
         break;
       }
     }
-
-    this.changeDatasetHandler = this.changeDatasetHandler.bind(this);
   }
 
   changeDatasetHandler (dataset) {
@@ -280,7 +273,7 @@ class Content extends React.Component {
       data: JSON.parse(this.props.data),
       modal: null,
       show: false
-    }
+    };
     this.showModal = this.showModal.bind(this);
     this.hideModal = this.hideModal.bind(this);
   }
@@ -289,11 +282,11 @@ class Content extends React.Component {
     this.setState({
       show: true,
       modal: data
-    })
+    });
   }
 
   hideModal(){
-    this.setState({show: false})
+    this.setState({show: false});
   }
 
   render() {
@@ -310,6 +303,6 @@ class Content extends React.Component {
           num_results={this.state.data.num_results}
           clickHandler={this.hideModal}/>
       </div>
-    );
+    )
   }
 }
