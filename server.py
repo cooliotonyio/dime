@@ -86,7 +86,7 @@ def target_to_tensor(target, modality):
         if target in FAST_TAG:
             tensor = FAST_TAG[target]
         else:
-            raise KeyError("No tensor representation of '{}'".format(str(target)))
+            raise KeyError("No tensor representation of '{}' in text dataset".format(str(target)))
     elif "image" == modality:
         image = PIL.Image.open(target)
         image_transform = transforms.Compose([

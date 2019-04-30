@@ -45,7 +45,11 @@ def make_request(request, modality):
         r = requests.post(query_url, data = data)
     else:
         raise ValueError("Modality '{}' not supported".format(modality))
-    return r.json(), query_input
+
+    try:
+        return r.json(), query_input
+    except:
+        raise RuntimeError(r.content.decode())
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -70,12 +74,13 @@ def query(modality):
             }
             return render_template("results.html", data = json.dumps(data))
         except Exception as err:
-            print(str(err))
-            return str(err)
+            print(err)
+            return render_template("error.html", error = str(err))
     elif request.method == "GET":
         return home()
     else:
-        return "Method '{}' not supported".format(request.method)
+        error = "Method '{}' not supported".format(request.method)
+        return render_template("error.html", error = error)
 
 if __name__ == "__main__":
     print("ALLOWED_EXTENSIONS: ", ALLOWED_EXTENSIONS)
