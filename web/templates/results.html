@@ -1,54 +1,6 @@
 {% extends "_template.html" %}
 
 {% block content1 %}
-<div class="row justify-content-center">
-  <div class="col-8 text-center">
-    <h1 class="pt-5">Query:</h1>
-  </div>
-</div>
-<div class="row justify-content-center">
-  <div class="col-1 text-center">
-    <h4>Modality:</h4> 
-    {{modality}}
-    <br>
-    <br>
-    <a class="btn btn-primary pt-3" role="button" href="/">Search Another</a>
-  </div>
-  <div class="col-4 text-center">
-    <h4>Input:</h4>
-    {% if modality == "text" %}
-      {{query_input}}
-    {% endif %}
-    {% if modality == "image" %}
-      <img height="100" src="{{query_input}}">
-    {% endif %}
-  </div>
-  <div class="col-4 text-center">
-    <h4>Relevant Tags:</h4>
-    {% for tag in tags %}
-      {{tag}}, 
-    {% endfor%}
-  </div>
-</div>
-
-
-<div class="row justify-content-center">
-  <div class="col-3 text-center">
-    <h1 class="pt-5">Results:</h1>
-    <ul class="nav nav-tabs" id="myTab" role="tablist">
-    {% for result in results %}
-      {% if result["modality"] == "image" %}
-      <li class="nav-item">
-        <a class="nav-link {% if loop.index0 == 0 %} active {% endif %}" id="results_{{loop.index0}}-tab" data-toggle="tab" href="#results_{{loop.index0}}" role="tab" aria-controls="results_{{loop.index0}}" aria-selected="true">{{result["dataset"]}}</a>
-      </li>
-      {% endif %}
-    {% endfor %}
-    </ul>
-  </div>
-  <div class="col-6">
-    <canvas id="chart"></canvas>
-  </div>
-</div>
 
 <div class="tab-content pt-5" id="myTabContent">
 {% for result in results %}

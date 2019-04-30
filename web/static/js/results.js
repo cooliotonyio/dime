@@ -60,12 +60,110 @@ class Header extends React.Component {
   }
 }
 
+class ResultsHeader extends React.Component {
+  constructor(props) {
+    super(props);
+    this.changeDataset = this.changeDataset.bind(this);
+    this.createTabs = this.createTabs.bind(this);
+  }
+
+  changeDataset(dataset){
+    this.props.changeDatasetHandler(dataset);
+  }
+
+  createTabs() {
+    let tabs = [];
+    for (var i = 0; i < this.props.datasets.length; i++){
+      let dataset = this.props.datasets[i];
+      if (dataset.dataset === this.props.currentDataset.dataset) {
+        var button_class = "btn btn-primary"
+      } else {
+        var button_class = "btn btn-secondary"
+      }
+      tabs.push(
+        <button 
+          key = {i}
+          type="button" 
+          className={button_class} 
+          onClick ={(event)=>{this.changeDataset(dataset)}}>
+          {dataset.dataset} with {dataset.model}
+        </button>)
+    }
+    return tabs
+  }
+
+  render() {
+    return (
+      <div id="resultsHeader">
+        <div className="row justify-content-center">
+        <div className="col-3 text-center">
+          <h1 className="pt-5">Results:</h1>
+          <div className="btn-group" role="group" aria-label="Basic example">
+            {this.createTabs()}
+          </div>
+        </div>
+        <div className="col-6">
+          <canvas id="chart"></canvas>
+        </div>
+      </div>
+    </div>
+    )
+  }
+
+}
+
+class ResultsBody extends React.Component {
+  render() {
+    return (
+      <div id="resultsBody">
+        <h1>Body</h1>
+        <h4>{JSON.stringify(this.props.value)}</h4>
+      </div>
+    )
+  }
+}
+class Results extends React.Component{
+  constructor(props) {
+    super(props);
+    for (var i = 0; i < this.props.data.num_datasets; i++) {
+      var dataset = this.props.data.results[i];
+      if (dataset.modality == "image") {
+        this.state = {"dataset": dataset}
+        break;
+      }
+    }
+
+    this.changeDatasetHandler = this.changeDatasetHandler.bind(this);
+  }
+
+  changeDatasetHandler (dataset) {
+    console.log(dataset);
+    this.setState({
+      "dataset" : dataset
+    });
+  }
+
+  render() {
+    console.log("Rendering results...")
+    return (
+      <div id="results">
+        <ResultsHeader 
+          datasets={this.props.data.results} 
+          currentDataset={this.state.dataset}
+          changeDatasetHandler={this.changeDatasetHandler}/>
+        <ResultsBody value={this.state.dataset}/>
+      </div>
+    )
+  }
+}
 class Content extends React.Component {
   render() {
     var data = JSON.parse(this.props.data);
-    console.log(data);
     return (
-      <Header data={data}></Header>
+      <div>
+        <Header data={data}></Header>
+        <Results data={data}></Results>
+      </div>
     );
   }
 }
