@@ -2,7 +2,6 @@ from flask import Flask, render_template, request
 from werkzeug.utils import secure_filename
 import requests
 import os
-import traceback
 import json
 
 app = Flask(__name__)
@@ -33,7 +32,7 @@ def make_request(request, modality):
             else:
                 return "Filename '{}' not supported".format(f.filename)
         else:
-            return "File not found"
+            raise ValueError("File not found")
     elif "dataset" == modality:
         query_input = request.values["query_input"]
         data = {
@@ -45,7 +44,7 @@ def make_request(request, modality):
         }
         r = requests.post(query_url, data = data)
     else:
-        return "Modality '{}' not supported".format(modality)
+        raise ValueError("Modality '{}' not supported".format(modality))
     return r.json(), query_input
 
 def allowed_file(filename):
@@ -62,16 +61,15 @@ def query(modality):
         try:
             response, query_input = make_request(request, modality)
             data = {
+                "engine_url": ENGINE_URL,
                 "input_modality": response["input_modality"],
-                "query_input": query_input,
-                "results": response["results"],
                 "num_datasets": response["num_sets"],
                 "num_results": response["num_results"],
-                "engine_url": ENGINE_URL
+                "query_input": query_input,
+                "results": response["results"]
             }
             return render_template("results.html", data = json.dumps(data))
         except Exception as err:
-            traceback.print_tb(err.__traceback__)
             print(str(err))
             return str(err)
     elif request.method == "GET":
@@ -84,7 +82,5 @@ if __name__ == "__main__":
     print("ENGINE_URL: ",ENGINE_URL)
     app.run(
         host=os.getenv("LISTEN", "0.0.0.0"),
-        port=int(os.getenv("PORT", "80")),
-        debug=True, 
-        use_reloader=True
+        port=int(os.getenv("PORT", "80"))
     )

@@ -1,60 +1,19 @@
 {% extends "_template.html" %}
 
+{% block style %}
+  <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='css/results.css')}}"/>
+{% endblock %}
 
 {% block content%}
 <div id="content"></div>
+<canvas id="myChart" width="400" height="400"></canvas>
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0/dist/Chart.min.js"></script>
 <script type="text/jsx" src="{{url_for('static', filename='js/results.js')}}"></script>
 <script type="text/jsx">
-  var element = <Content data="{{data}}"/>
-  ReactDOM.render(element, document.getElementById("content"));
+  var content = <Content data="{{data}}"/>;
+  ReactDOM.render(content, document.getElementById("content"));
 </script>
 {% endblock %}
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0/dist/Chart.min.js"></script>
-<script>
-  
-  console.log({{ results[0]["dis"] }});
-
-  var data = {
-    labels: Array.from({length: {{num_results}}}, (v, k) => k+1),
-    datasets: [{
-      label: "nus-wide",
-      backgroundColor: "rgba(255,99,132,0.2)",
-      borderColor: "rgba(255,99,132,1)",
-      borderWidth: 2,
-      hoverBackgroundColor: "rgba(255,99,132,0.4)",
-      hoverBorderColor: "rgba(255,99,132,1)",
-      data: {{ results[0]["dis"] }},
-    }]
-  };
-
-  var options = {
-    maintainAspectRatio: false,
-    scales: {
-      yAxes: [{
-        stacked: true,
-        gridLines: {
-          display: true,
-          color: "rgba(255,99,132,0.2)"
-        }
-      }],
-      xAxes: [{
-        gridLines: {
-          display: false
-        }
-      }]
-    }
-  };
-
-
-  var myChart = Chart.Bar('chart', {
-    options: options,
-    data: data
-  });
-  
-</script>
-
-

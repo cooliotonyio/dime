@@ -15,6 +15,53 @@ class Image extends React.Component {
   }
 }
 
+class LineGraph extends React.Component {
+
+  chartRef = React.createRef();
+
+  componentDidMount() {
+    const myChartRef = this.chartRef.current.getContext("2d"); 
+
+    const data = {
+      labels: Array.from({length: this.props.data.length}, (v, k) => k+1),
+      datasets: [{
+        label: this.props.label,
+        data: this.props.data,
+        backgroundColor: "rgba(255,99,132,0.2)",
+        borderColor: "rgba(255,99,132,1)",
+      }]
+    }
+
+    const options = {
+      maintainAspectRatio: false,
+      scales: {
+        yAxes: [{
+          stacked: true,
+          gridLines: {
+            display: true,
+            color: "rgba(255,99,132,0.2)"
+          }
+        }],
+        xAxes: [{
+          gridLines: {
+            display: false
+          }
+        }]
+      }
+    }
+
+    new Chart(myChartRef, {
+        type: "line",
+        data: data,
+        options: options
+    });
+  }
+
+  render() {
+    return <canvas id="myChart" ref={this.chartRef}/>
+  }
+}
+
 class Modal extends React.Component {
   constructor(props) {
     super(props);
@@ -98,7 +145,7 @@ class Header extends React.Component {
       case "text":
         return this.props.data.query_input;
       case "image":
-        return "<img height='100' src="+this.props.data.query_input+"/>";
+        return <img height='100' src={this.props.data.query_input}/>;
     }  
   }
 
@@ -145,12 +192,12 @@ class Header extends React.Component {
 class ResultsHeader extends React.Component {
   constructor(props) {
     super(props);
-    this.changeDataset = this.changeDataset.bind(this);
     this.createTabs = this.createTabs.bind(this);
+    this.createGraph = this.createGraph.bind(this);
   }
 
-  changeDataset(dataset){
-    this.props.changeDatasetHandler(dataset);
+  createGraph(dataset) {
+    return <LineGraph label={dataset.dataset} data={dataset.dis}/>
   }
 
   createTabs() {
@@ -168,7 +215,7 @@ class ResultsHeader extends React.Component {
             key = {i}
             type="button" 
             className={button_class} 
-            onClick ={(event)=>{this.changeDataset(dataset)}}>
+            onClick ={(event)=>{this.props.changeDatasetHandler(dataset)}}>
             {dataset.dataset} with {dataset.model}
           </button>);
       }
@@ -180,14 +227,14 @@ class ResultsHeader extends React.Component {
     return (
       <div id="resultsHeader">
         <div className="row justify-content-center">
-        <div className="col-3 text-center">
-          <h1 className="pt-5">Results:</h1>
+        <div className="col-4 pt-5 text-center">
+          <h1>Results:</h1>
           <div className="btn-group" role="group" aria-label="Basic example">
             {this.createTabs()}
           </div>
         </div>
-        <div className="col-6">
-          <canvas id="chart"></canvas>
+        <div className="col-6 pt-5">
+          {this.createGraph(this.props.currentDataset)}
         </div>
       </div>
     </div>
