@@ -14,12 +14,11 @@ import logging
 
 from search import SearchEngine
 
-FAST_TAG = pickle.load(open("pickles/word_embeddings/word_embeddings_tensors.p", "rb"))
-# FAST_TAG = {i:"hi" for i in range(10000000)}
 EMBEDDING_DIR = ""
 UPLOAD_DIR = "./uploads"
 DATA_DIR = "./data"
 ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif'])
+FAST_TEXT = None
 
 app = Flask(__name__)
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
@@ -43,6 +42,8 @@ def init_engine(app):
 
     # Build Datasets
     print("Building datasets...")
+    global FAST_TEXT
+    FAST_TEXT = pickle.load(open("pickles/word_embeddings/word_embeddings_tensors.p", "rb"))
     image_directory = 'data/Flickr'
     image_transform = transforms.Compose([
         transforms.Resize((224,224)),
@@ -50,10 +51,10 @@ def init_engine(app):
         transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
     image_data = ImageFolder('data/Flickr', transform = image_transform)
     image_from_idx = [i[0] for i in image_data.samples]
-    fast_tag = FAST_TAG
-    text_from_idx = [None] * len(fast_tag)
-    text_data = [None] * len(fast_tag)
-    for idx, (key, value) in enumerate(fast_tag.items()):
+    fast_text = FAST_TEXT
+    text_from_idx = [None] * len(fast_text)
+    text_data = [None] * len(fast_text)
+    for idx, (key, value) in enumerate(fast_text.items()):
         text_from_idx[idx] = key
         text_data[idx] = (value, idx)
 
@@ -69,12 +70,12 @@ def init_engine(app):
     search_engine = SearchEngine(["text", "image"], save_directory = save_directory, verbose = True)
     search_engine.add_model(text_net, "text_net", "text", (300,) , 30)
     search_engine.add_model(image_net, "image_net", "image", (3, 224, 224), 30)
-    search_engine.add_dataset("fast_tag", text_dataloader, text_from_idx, "text", (300,))
+    search_engine.add_dataset("fast_text", text_dataloader, text_from_idx, "text", (300,))
     search_engine.add_dataset("nus-wide", image_dataloader, image_from_idx, "image", (3, 224, 224))
 
     #Build Indexes
     print("Building Indexes")
-    search_engine.build_index("fast_tag")
+    search_engine.build_index("fast_text")
     search_engine.build_index("nus-wide")
 
     #Finished
@@ -83,8 +84,8 @@ def init_engine(app):
 def target_to_tensor(target, modality):
     search_engine = app.search_engine
     if "text" == modality:
-        if target in FAST_TAG:
-            tensor = FAST_TAG[target]
+        if target in FAST_TEXT:
+            tensor = FAST_TEXT[target]
         else:
             raise KeyError("No tensor representation of '{}' in text dataset".format(str(target)))
     elif "image" == modality:
