@@ -25,12 +25,13 @@ def make_request(request, modality):
     elif "image" == modality:
         if "file" in request.files:
             f = request.files["file"]
-            if f.filename and allowed_file(f.filename):
-                query_input = ENGINE_URL + "/uploads/" + f.filename
-                files = {"file": (f.filename, f)}
+            if f.filename and allowed_file(f.filename.strip()):
+                filename = f.filename.strip().replace(" ","")
+                query_input = ENGINE_URL + "/uploads/" + filename
+                files = {"file": (filename, f)}
                 r = requests.post(query_url, files = files, data = data)
             else:
-                return "Filename '{}' not supported".format(f.filename)
+                raise ValueError("Filename '{}' not supported".format(f.filename))
         else:
             raise ValueError("File not found")
     elif "dataset" == modality:
@@ -53,7 +54,7 @@ def make_request(request, modality):
 
 def allowed_file(filename):
     return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS   
+           filename.rsplit('.', 1)[-1].lower() in ALLOWED_EXTENSIONS   
 
 @app.route("/")
 def home():
@@ -84,7 +85,7 @@ def query(modality):
 
 if __name__ == "__main__":
     print("ALLOWED_EXTENSIONS: ", ALLOWED_EXTENSIONS)
-    print("ENGINE_URL: ",ENGINE_URL)
+    print("ENGINE_URL: ", ENGINE_URL)
     app.run(
         host=os.getenv("LISTEN", "0.0.0.0"),
         port=int(os.getenv("PORT", "80"))
