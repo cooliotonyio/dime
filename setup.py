@@ -45,6 +45,10 @@ fetch_and_cache(data_url = 'http://dl.nextcenter.org/public/nuswide/ConceptsList
                 file = 'concepts.zip',
                 data_dir = './data_zipped',
                 force = FORCE_DOWNLOAD)
+fetch_and_cache(data_url = 'http://dl.nextcenter.org/public/nuswide/ImageList.zip',
+                file = 'imagelist.zip',
+                data_dir = './data_zipped',
+                force = FORCE_DOWNLOAD)
 
 print("Extracting NUSWIDE metadata...")
 with ZipFile('data_zipped/tags.zip', 'r') as data_zipped:
@@ -53,6 +57,8 @@ with ZipFile('data_zipped/groundtruth.zip', 'r') as data_zipped:
     data_zipped.extractall(path = "data/nuswide_metadata/")
 with ZipFile('data_zipped/concepts.zip', 'r') as data_zipped:
     data_zipped.extractall(path = "data/nuswide_metadata/")
+with ZipFile('data_zipped/imagelist.zip', 'r') as data_zipped:
+    data_zipped.extractall(path = "data/nuswide_metadata/")
 print("Done extracting NUSWIDE metadata!")
 
 
@@ -60,6 +66,8 @@ print("Processing and pickling NUSWIDE metadata...")
 os.system("python3 nuswide_processing_scripts/make_relevancy_matrix.py")
 os.system("python3 nuswide_processing_scripts/make_tag_matrix.py")
 os.system("python3 nuswide_processing_scripts/make_concepts.py")
+os.system("python3 nuswide_processing_scripts/filter_concepts.py")
+os.system("python3 nuswide_processing_scripts/make_nuswide_folder_labels.py")
 print("Done processing and pickling NUSWIDE metadata!")
 
 print("Downloading the FastText word embeddings... (this might take some time)")
