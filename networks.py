@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torchvision.models as models
 from torch.autograd import Variable
 import io
+from pytorch_revgrad import RevGrad
 
 
 class EmbeddingNet(nn.Module):
@@ -41,13 +42,16 @@ class EmbeddingNet(nn.Module):
 class Resnet152EmbeddingNet(nn.Module):
     def __init__(self, dim=64):
         super(Resnet152EmbeddingNet, self).__init__()
-        self.fc = nn.Sequential(nn.Linear(2048, 1024),
+#        self.fc = nn.Sequential(nn.Linear(2048, 1024),
+#                                nn.PReLU(),
+#                                nn.Linear(1024, 512),
+#                                nn.PReLU(),
+#                                nn.Linear(512, 256),
+#                                nn.PReLU(),
+#                                nn.Linear(256, dim))
+        self.fc = nn.Sequential(nn.Linear(2048, 2000),
                                 nn.PReLU(),
-                                nn.Linear(1024, 512),
-                                nn.PReLU(),
-                                nn.Linear(512, 256),
-                                nn.PReLU(),
-                                nn.Linear(256, dim))
+                                nn.Linear(2000, dim))
 
     def forward(self, x):
         return self.fc(x)
@@ -71,8 +75,6 @@ class Resnet18EmbeddingNet(nn.Module):
         return self.forward(x)
 
 
-
-
 class EmbeddingNetL2(EmbeddingNet):
     def __init__(self):
         super(EmbeddingNetL2, self).__init__()
@@ -88,13 +90,17 @@ class EmbeddingNetL2(EmbeddingNet):
 class TextEmbeddingNet(nn.Module):
     def __init__(self, dim=64):
         super(TextEmbeddingNet, self).__init__()
-        self.fc = nn.Sequential(nn.Linear(300, 256),
-                nn.PReLU(),
-                nn.Linear(256, 256),
-                nn.PReLU(),
-                nn.Linear(256, 128),
-                nn.PReLU(),
-                nn.Linear(128, dim))
+ #       self.fc = nn.Sequential(nn.Linear(300, 256),
+ #               nn.PReLU(),
+ #               nn.Linear(256, 256),
+ #               nn.PReLU(),
+ #               nn.Linear(256, 128),
+ #               nn.PReLU(),
+ #               nn.Linear(128, dim))
+
+        self.fc = nn.Sequential(nn.Linear(300, 500),
+               nn.PReLU(),
+               nn.Linear(500, dim))
 
     def forward(self, x):
         return self.fc(x)
@@ -102,7 +108,7 @@ class TextEmbeddingNet(nn.Module):
 class TwoStreamVideoEmbeddingNet(nn.Module):
     def __init__(self):
         super(TwoStreamVideoEmbeddingNet, self).__init__()
-        self.fc == nn.Sequential(nn.Linear(2560, 1024),
+        self.fc = nn.Sequential(nn.Linear(2560, 1024),
                                  nn.PReLU(),
                                  nn.Linear(1024, 512),
                                  nn.PreLU(),
@@ -183,3 +189,14 @@ class IntermodalTripletNet(nn.Module):
 
     def get_modTwo_embedding(self, x):
         return self.modalityTwoNet(x)
+
+class ModalityDiscriminator(nn.Module):
+    def __init__(self, dim=64):
+        super(ModalityDiscriminator, self).__init__()
+        self.fc = nn.Sequential(RevGrad(),
+                nn.Linear(dim, 64),
+                nn.PReLU(),
+                nn.Linear(64, 1))
+
+    def forward(self, embedding):
+        return F.softmax(self.fc(embedding), dim=-1)
