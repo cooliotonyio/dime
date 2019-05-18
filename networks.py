@@ -71,16 +71,14 @@ class EmbeddingNet(nn.Module):
 class Resnet152EmbeddingNet(nn.Module):
     def __init__(self, dim=64):
         super(Resnet152EmbeddingNet, self).__init__()
-#        self.fc = nn.Sequential(nn.Linear(2048, 1024),
-#                                nn.PReLU(),
-#                                nn.Linear(1024, 512),
-#                                nn.PReLU(),
-#                                nn.Linear(512, 256),
-#                                nn.PReLU(),
-#                                nn.Linear(256, dim))
-        self.fc = nn.Sequential(nn.Linear(2048, 2000),
+        self.fc = nn.Sequential(nn.Linear(2048, 1024),
                                 nn.PReLU(),
-                                nn.Linear(2000, dim))
+                                nn.Linear(1024, 512),
+                                nn.PReLU(),
+                                nn.Linear(512, 256),
+                                nn.PReLU(),
+                                nn.Linear(256, dim))
+
 
     def forward(self, x):
         return self.fc(x)
@@ -119,17 +117,14 @@ class EmbeddingNetL2(EmbeddingNet):
 class TextEmbeddingNet(nn.Module):
     def __init__(self, dim=64):
         super(TextEmbeddingNet, self).__init__()
- #       self.fc = nn.Sequential(nn.Linear(300, 256),
- #               nn.PReLU(),
- #               nn.Linear(256, 256),
- #               nn.PReLU(),
- #               nn.Linear(256, 128),
- #               nn.PReLU(),
- #               nn.Linear(128, dim))
+        self.fc = nn.Sequential(nn.Linear(300, 256),
+                nn.PReLU(),
+                nn.Linear(256, 256),
+                nn.PReLU(),
+                nn.Linear(256, 128),
+                nn.PReLU(),
+                nn.Linear(128, dim))
 
-        self.fc = nn.Sequential(nn.Linear(300, 500),
-               nn.PReLU(),
-               nn.Linear(500, dim))
 
     def forward(self, x):
         return self.fc(x)
@@ -223,7 +218,7 @@ class ModalityDiscriminator(nn.Module):
 
     def __init__(self, dim=64):
         super(ModalityDiscriminator, self).__init__()
-        self.fc = nn.Sequential(RevGrad(),
+        self.fc = nn.Sequential(
                 nn.Linear(dim, 64),
                 nn.PReLU(),
                 nn.Linear(64, 1))

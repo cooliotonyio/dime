@@ -18,8 +18,10 @@ def fit(train_loader, val_loader, batch_sampler, proj_model, d_model, proj_loss_
     """
     def pass_epoch(loader, train=True):
 
-        def get_classifier_loss(text_projections, image_projections, train=False):
-            d_model.train(train)
+        def get_classifier_loss(text_projections, image_projections, detach=False):
+            if detach:
+                image_projections = image_projections.detach()
+                text_projections = text_projections.detach()
 
             pred_images = d_model(image_projections)
             pred_text = d_model(text_projections)
@@ -47,29 +49,29 @@ def fit(train_loader, val_loader, batch_sampler, proj_model, d_model, proj_loss_
         total_proj_loss = 0
         total_disc_loss = 0
 
-        k = 5
+        k = 6
         for batch_idx, batch in enumerate(loader):
-            train_discriminator = ((batch_idx + 1) % k) == 0 and train
-
+            train_discriminator = (batch_idx % k) == 0
             intermod_triplet_data = batch_sampler(batch, cuda)
-
             outputs = proj_model(*intermod_triplet_data)
-
             proj_loss = 0.5 * proj_loss_fn(*outputs)
-            d_loss = get_classifier_loss(outputs[3], outputs[0], train=train_discriminator)
 
             if train:
-                proj_optimizer.zero_grad()
-                proj_losses.append(proj_loss.item())
                 if train_discriminator:
                     d_optimizer.zero_grad()
-                    d_losses.append(d_loss.item())
-
-                (proj_loss - d_loss).backward()
-                proj_optimizer.step()
-
-                if train_discriminator:
+                    d_loss = get_classifier_loss(outputs[3], outputs[0], detach=True)
+                    (d_loss - proj_loss).backward()
                     d_optimizer.step()
+                    d_losses.append(d_loss.item())
+                else:
+                    proj_optimizer.zero_grad()
+                    d_optimizer.zero_grad()
+                    d_loss = get_classifier_loss(outputs[3], outputs[0], detach=False)
+                    (proj_loss - d_loss).backward()
+                    proj_optimizer.step()
+                    proj_losses.append(proj_loss.item())
+            else:
+                d_loss = get_classifier_loss(outputs[3], outputs[0], detach=False)
 
             total_proj_loss += proj_loss.item()
             total_disc_loss += d_loss.item()
