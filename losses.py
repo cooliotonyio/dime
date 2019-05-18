@@ -41,10 +41,9 @@ class InterTripletLoss(nn.Module):
         super(InterTripletLoss, self).__init__()
         self.margin = margin
 
-    def forward(self, anchor_txt, positive_im, negative_im, anchor_im, positive_txt, negative_txt, acmr=False):
+    def forward(self, anchor_im, positive_txt, negative_txt, anchor_txt, positive_im, negative_im, acmr=False):
         distance_positive_t = (anchor_txt - positive_im).pow(2).sum(1).sqrt()  # .pow(.5)
         distance_negative_t = (anchor_txt - negative_im).pow(2).sum(1).sqrt()  # .pow(.5)
-
 
         distance_positive_im = (anchor_im - positive_txt).pow(2).sum(1).sqrt()  # .pow(.5)
         distance_negative_im = (anchor_im - negative_txt).pow(2).sum(1).sqrt()  # .pow(.5)
@@ -58,7 +57,8 @@ class InterTripletLoss(nn.Module):
         losses = losses_im + losses_t
 
         return losses.mean()
-
+    
+    
 class OnlineContrastiveLoss(nn.Module):
     """
     Online Contrastive loss

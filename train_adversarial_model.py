@@ -113,4 +113,4 @@ fit(i_triplet_train_loader, i_triplet_val_loader, dataset.intermodal_triplet_bat
         proj_optimizer, d_optimizer,
         n_epochs, cuda, log_interval)
 
-pickle.dump(model, open('pickles/models/baseline.p', 'wb'))
+pickle.dump(model, open('pickles/models/baseline_adv.p', 'wb'))

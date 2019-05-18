@@ -19,7 +19,7 @@ def fit(train_loader, val_loader, batch_sampler, proj_model, d_model, proj_loss_
     def pass_epoch(loader, train=True):
 
         def get_classifier_loss(text_projections, image_projections, train=False):
-            #d_model.train(train)
+            d_model.train(train)
 
             pred_images = d_model(image_projections)
             pred_text = d_model(text_projections)
@@ -31,8 +31,6 @@ def fit(train_loader, val_loader, batch_sampler, proj_model, d_model, proj_loss_
             t_loss = d_loss_fn(pred_text, text_label)
 
             loss = i_loss + t_loss
-
-            print(loss.item())
 
             return loss
 
@@ -51,32 +49,27 @@ def fit(train_loader, val_loader, batch_sampler, proj_model, d_model, proj_loss_
 
         k = 5
         for batch_idx, batch in enumerate(loader):
-            train_discriminator = ((batch_idx + 1) % k) == 0
+            train_discriminator = ((batch_idx + 1) % k) == 0 and train
 
             intermod_triplet_data = batch_sampler(batch, cuda)
 
             outputs = proj_model(*intermod_triplet_data)
 
-            proj_loss = 10 * proj_loss_fn(*outputs)
-            # will return a fixed classifier loss if train_discriminator = False
-            # this implies that d_model parmas = requir grad = false
+            proj_loss = 0.5 * proj_loss_fn(*outputs)
             d_loss = get_classifier_loss(outputs[3], outputs[0], train=train_discriminator)
 
             if train:
-                proj_losses.append(proj_loss.item())
                 proj_optimizer.zero_grad()
-                (proj_loss - d_loss).backward(retain_graph=True)
-                for param in d_model.parameters():
-                    print(param.grad.data.sum())
+                proj_losses.append(proj_loss.item())
+                if train_discriminator:
+                    d_optimizer.zero_grad()
+                    d_losses.append(d_loss.item())
+
+                (proj_loss - d_loss).backward()
                 proj_optimizer.step()
 
                 if train_discriminator:
-                    d_losses.append(d_loss.item())
-                    for param in d_model.parameters():
-                        print(param.grad.data.sum())
                     d_optimizer.step()
-
-                proj_model.train()
 
             total_proj_loss += proj_loss.item()
             total_disc_loss += d_loss.item()
@@ -100,10 +93,10 @@ def fit(train_loader, val_loader, batch_sampler, proj_model, d_model, proj_loss_
         # Train stage
         train_loss = pass_epoch(train_loader)
 
-        message = 'Epoch: {}/{}. Train set: Average Triplet loss: {:.4f} Average Discriminator loss: {:.4f}'.format(epoch + 1, n_epochs, train_loss)
+        message = 'Epoch: {}/{}. Train set: Average Triplet loss: {:.4f} Average Discriminator loss: {:.4f}'.format(epoch + 1, n_epochs, train_loss[0], train_loss[1])
 
         val_loss = pass_epoch(val_loader, train=False)
 
-        message += '\nEpoch: {}/{}. Validation set: Average Triplet loss: {:.4f} Average Discriminator loss: {:.4f}'.format(epoch + 1, n_epochs, val_loss)
+        message += '\nEpoch: {}/{}. Validation set: Average Triplet loss: {:.4f} Average Discriminator loss: {:.4f}'.format(epoch + 1, n_epochs, val_loss[0], val_loss[1])
 
         print(message)

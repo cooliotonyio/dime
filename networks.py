@@ -3,9 +3,38 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 from torch.autograd import Variable
+from torch.autograd import Function
 import io
-from pytorch_revgrad import RevGrad
 
+
+class RevGrad(Function):
+    @staticmethod
+    def forward(ctx, input_):
+        ctx.save_for_backward(input_)
+        output = input_
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output):  # pragma: no cover
+        grad_input = None
+        if ctx.needs_input_grad[0]:
+            grad_input = -grad_output
+        return grad_input
+
+revgrad = RevGrad.apply
+
+class RevGrad(nn.Module):
+    def __init__(self, *args, **kwargs):
+        """
+        A gradient reversal layer.
+        This layer has no parameters, and simply reverses the gradient
+        in the backward pass.
+        """
+
+        super().__init__(*args, **kwargs)
+
+    def forward(self, input_):
+        return revgrad(input_)
 
 class EmbeddingNet(nn.Module):
     def __init__(self):
@@ -191,6 +220,7 @@ class IntermodalTripletNet(nn.Module):
         return self.modalityTwoNet(x)
 
 class ModalityDiscriminator(nn.Module):
+
     def __init__(self, dim=64):
         super(ModalityDiscriminator, self).__init__()
         self.fc = nn.Sequential(RevGrad(),
@@ -199,4 +229,4 @@ class ModalityDiscriminator(nn.Module):
                 nn.Linear(64, 1))
 
     def forward(self, embedding):
-        return F.softmax(self.fc(embedding), dim=-1)
+        return F.softmax(self.fc(embedding), dim=0)
