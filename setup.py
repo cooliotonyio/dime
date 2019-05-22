@@ -13,11 +13,12 @@ import io
 import torch
 import pickle
 import tarfile
+import time
 from zipfile import ZipFile
 from util import fetch_and_cache
 
 FORCE_DOWNLOAD = False
-
+start_time = time.time()
 print("Starting setup... This might take a while.")
 print("Making directories...", end=" ")
 if not os.path.isdir("./data_zipped"):
@@ -107,4 +108,9 @@ image_data = tarfile.open("./data_zipped/flickr.tar.gz")
 image_data.extractall(path='./data')
 print("Done extracting NUSWIDE!")
 
-print("Finished setup!")
+print("Extracting NUSWIDE ResNet features... (this will take a lot of time)")
+os.system("python3 feature_extractors/resnet152_nuswide_processor.py")
+os.system("python3 feature_extractors/resnet18_nuswide_processor.py")
+print("Done extracting features!")
+
+print("Finished setup in {} seconds!".format(time.time() - start_time))

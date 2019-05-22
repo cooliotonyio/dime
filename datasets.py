@@ -166,7 +166,7 @@ class NUS_WIDE(BaseCMRetrievalDataset):
 
     """
 
-    def __init__(self, root, transform, train=True, feature_mode='resnet152', word_embeddings=None):
+    def __init__(self, root, transform, train=True, feature_mode='vanilla', word_embeddings=None):
         primary_tags = pickle.load(open("pickles/nuswide_metadata/tag_matrix.p", "rb"))
 
         super(NUS_WIDE, self).__init__(root, transform, primary_tags=None)
@@ -183,6 +183,7 @@ class NUS_WIDE(BaseCMRetrievalDataset):
         elif feature_mode == 'resnet18':
             self.features = pickle.load(open("pickles/nuswide_features/resnet18_nuswide_feats_dict.p", "rb"))
         else:
+            print("WARNING: NUS_WIDE dataset feature_mode is None")
             self.features, self.feature_mode = None, 'vanilla'
 
         self.word_embeddings = word_embeddings
@@ -217,9 +218,9 @@ class NUS_WIDE(BaseCMRetrievalDataset):
 
     def _make_image_paths(self, dir, train=True):
         if train:
-            file_paths_fname = "./nuswide_metadata/Imagelist/TrainImagelist.txt"
+            file_paths_fname = "data/nuswide_metadata/ImageList/TrainImagelist.txt"
         else:
-            file_paths_fname = "./nuswide_metadata/Imagelist/TestImagelist.txt"
+            file_paths_fname = "data/nuswide_metadata/ImageList/TestImagelist.txt"
 
         image_paths = []
 
@@ -232,13 +233,13 @@ class NUS_WIDE(BaseCMRetrievalDataset):
         return image_paths
 
     def _make_idx_to_concept():
-        fname = "nuswide_metadata/Concepts81.txt"
+        fname = "data/nuswide_metadata/Concepts81.txt"
         idx_to_concept = idx_maker(fname)
         return idx_to_concept
 
 
     def _make_idx_to_tag():
-        fname = "./nuswide_metadata/TagList1k.txt"
+        fname = "data/nuswide_metadata/TagList1k.txt"
         idx_to_tag = idx_maker(fname)
         return idx_to_tag
 
@@ -258,7 +259,7 @@ class NUS_WIDE(BaseCMRetrievalDataset):
 
 
     def make_concept_relevancy_matrix(train=True):
-        path = './nuswide_metadata/TrainTestLabels/'
+        path = 'data/nuswide_metadata/TrainTestLabels/'
         if train:
             suffix_indicator = "Train.txt"
             n = 161789
@@ -278,7 +279,7 @@ class NUS_WIDE(BaseCMRetrievalDataset):
         for idx, filename in enumerate(filenames):
             with open(path + filename) as f:
                 content = f.readlines()
-                curr_column = np.array([int(i[0]) for i in content], dtype=int)
+                curr_column = np.array([int(i) for i in content], dtype=int)
             relevancy_matrix[:, idx] = curr_column
 
         return relevancy_matrix
@@ -286,10 +287,10 @@ class NUS_WIDE(BaseCMRetrievalDataset):
 
     def make_tag_relevancy_matrix(train=True):
         if train:
-            path = './nuswide_metadata/Train_Tags1k.dat'
+            path = 'data/nuswide_metadata/Train_Tags1k.dat'
             n = 161789
         else:
-            path = './nuswide_metadata/Test_Tags1k.dat'
+            path = 'data/nuswide_metadata/Test_Tags1k.dat'
             n = 107859
 
         relevancy_matrix = np.zeros((n,1000), dtype=int)
@@ -315,7 +316,9 @@ class NUS_WIDE(BaseCMRetrievalDataset):
         target = self._folder_targets[index]
 
         if self.feature_mode is not 'vanilla':
-            return index, self.features[self.image_paths[index]], self._folder_targets[index]
+            sample = self.features[self.image_paths[index]]
+            target = self._folder_targets[index]
+            return index, sample, target
 
         if self.transform is not None:
             return index, self.transform(sample), self._folder_targets[index]
