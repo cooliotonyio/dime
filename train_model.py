@@ -1,15 +1,12 @@
-import csv
-from datasets import NUS_WIDE
-import pickle
-
-import torchvision as tv
 from torchvision import transforms
-import torch
-from torch.optim import lr_scheduler
 import torch.optim as optim
-from torch.autograd import Variable
-from trainer import fit
 import numpy as np
+import csv
+import pickle
+import torch
+
+from trainer import fit
+from datasets import NUS_WIDE
 
 from networks import TextEmbeddingNet, Resnet152EmbeddingNet, IntermodalTripletNet, Resnet18EmbeddingNet
 from losses import InterTripletLoss
@@ -21,6 +18,7 @@ lr = 1e-3
 n_epochs = 15
 output_embedding_size = 64
 feature_mode = 'resnet152'
+random_seed = 21
 ##################
 
 cuda = torch.cuda.is_available()
@@ -34,7 +32,7 @@ mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
 print("Loading NUS_WIDE dataset...")
 data_path = './data/Flickr'
 dataset = NUS_WIDE(root=data_path,
-                    transform=transforms.Compose([tv.transforms.Resize((224,224)),
+                    transform=transforms.Compose([transforms.Resize((224,224)),
                                                     transforms.ToTensor(),
                                                     transforms.Normalize(mean,std)]),
                     feature_mode=feature_mode,
@@ -52,7 +50,7 @@ validation_split = 0.2
 
 indices = list(range(dataset_size))
 split = int(np.floor(validation_split * dataset_size))
-np.random.seed(21)
+np.random.seed(random_seed)
 np.random.shuffle(indices)
 train_indices, val_indices = indices[split:], indices[:split]
 
@@ -78,7 +76,7 @@ if cuda:
 
 loss_fn = InterTripletLoss(margin)
 optimizer = optim.Adam(model.parameters(), lr=lr)
-scheduler = lr_scheduler.StepLR(optimizer, 8, gamma=0.1, last_epoch=-1)
+scheduler = optim.lr_scheduler.StepLR(optimizer, 8, gamma=0.1, last_epoch=-1)
 
 log_interval = 100
 fit(i_triplet_train_loader, i_triplet_val_loader, dataset.intermodal_triplet_batch_sampler, model, loss_fn, optimizer, scheduler, n_epochs, cuda, log_interval)

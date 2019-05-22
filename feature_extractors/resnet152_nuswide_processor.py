@@ -8,11 +8,12 @@ import torchvision.transforms as transforms
 from torch.autograd import Variable
 from PIL import Image
 
+sys.path.append("{}/..".format(sys.path[0]))
 from datasets import NUS_WIDE
 
-base = "./"
+base = "pickles/nuswide_features/"
 if not os.path.isdir(base):
-    os.mkdir(os.fsencode(base))
+    raise RuntimeError("Base folder '{}' not found".format(base))
 
 scaler = transforms.Resize((224,224))
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -38,14 +39,13 @@ def get_image_feature(im_path):
 
     return embedding
 
-dataset = NUS_WIDE('./data/Flickr', None)
+dataset = NUS_WIDE('data/Flickr', None)
 
 feature_dict = {}
 feature_array = [None] * len(dataset)
 
 for i in range(len(dataset)):
-    print("file: ", i)
-    file_path = dataset.imgs.samples[i][0]
+    file_path = dataset.image_paths[i]
     feature_i = get_image_feature(file_path)
     feature_dict[file_path] = feature_i.cpu().squeeze()
     feature_array[i] = feature_i.cpu().squeeze()

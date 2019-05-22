@@ -26,6 +26,8 @@ import torchvision.transforms as transforms
 from torch.autograd import Variable
 from PIL import Image
 
+base = "/pickles/nuswide_features/"
+
 scaler = transforms.Resize((224,224))
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 to_tensor = transforms.ToTensor()
@@ -73,4 +75,4 @@ for f in video_files:
     avg_aggregation = torch.mean(all_frames, 0)
     frame_level_features[f] = avg_aggregation
 
-pickle.dump(frame_level_features, open('frame_level_features.p', 'wb'))
+pickle.dump(frame_level_features, open(base + 'frame_level_features.p', 'wb'))
