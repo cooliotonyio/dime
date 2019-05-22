@@ -3,8 +3,38 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 from torch.autograd import Variable
+from torch.autograd import Function
 import io
 
+
+class RevGrad(Function):
+    @staticmethod
+    def forward(ctx, input_):
+        ctx.save_for_backward(input_)
+        output = input_
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output):  # pragma: no cover
+        grad_input = None
+        if ctx.needs_input_grad[0]:
+            grad_input = -grad_output
+        return grad_input
+
+revgrad = RevGrad.apply
+
+class RevGrad(nn.Module):
+    def __init__(self, *args, **kwargs):
+        """
+        A gradient reversal layer.
+        This layer has no parameters, and simply reverses the gradient
+        in the backward pass.
+        """
+
+        super().__init__(*args, **kwargs)
+
+    def forward(self, input_):
+        return revgrad(input_)
 
 class EmbeddingNet(nn.Module):
     def __init__(self):
@@ -49,6 +79,7 @@ class Resnet152EmbeddingNet(nn.Module):
                                 nn.PReLU(),
                                 nn.Linear(256, dim))
 
+
     def forward(self, x):
         return self.fc(x)
 
@@ -69,8 +100,6 @@ class Resnet18EmbeddingNet(nn.Module):
 
     def get_embedding(self, x):
         return self.forward(x)
-
-
 
 
 class EmbeddingNetL2(EmbeddingNet):
@@ -96,13 +125,14 @@ class TextEmbeddingNet(nn.Module):
                 nn.PReLU(),
                 nn.Linear(128, dim))
 
+
     def forward(self, x):
         return self.fc(x)
 
 class TwoStreamVideoEmbeddingNet(nn.Module):
     def __init__(self):
         super(TwoStreamVideoEmbeddingNet, self).__init__()
-        self.fc == nn.Sequential(nn.Linear(2560, 1024),
+        self.fc = nn.Sequential(nn.Linear(2560, 1024),
                                  nn.PReLU(),
                                  nn.Linear(1024, 512),
                                  nn.PreLU(),
@@ -183,3 +213,15 @@ class IntermodalTripletNet(nn.Module):
 
     def get_modTwo_embedding(self, x):
         return self.modalityTwoNet(x)
+
+class ModalityDiscriminator(nn.Module):
+
+    def __init__(self, dim=64):
+        super(ModalityDiscriminator, self).__init__()
+        self.fc = nn.Sequential(
+                nn.Linear(dim, 64),
+                nn.PReLU(),
+                nn.Linear(64, 1))
+
+    def forward(self, embedding):
+        return F.softmax(self.fc(embedding), dim=0)
