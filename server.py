@@ -17,7 +17,7 @@ from search import SearchEngine
 EMBEDDING_DIR = ""
 UPLOAD_DIR = "./uploads"
 DATA_DIR = "./data"
-ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif'])
+ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg'])
 FAST_TEXT = None
 
 app = Flask(__name__)
@@ -30,15 +30,9 @@ def allowed_file(filename):
 def init_engine(app):
     # Build Networks
     print("Building networks...")
-    text_net = pickle.load(open("pickles/models/entire_nuswide_model.p", "rb"))
-    def get_text_embedding(*data):
-        return text_net.text_embedding_net(data[0])
-    text_net.get_embedding = get_text_embedding
-    image_net = pickle.load(open("pickles/models/entire_nuswide_model.p", "rb"))
-    text_net.cpu()
-    text_net.eval()
-    image_net.cpu()
-    image_net.eval()
+    resnet152_15 = pickle.load(open("pickles/models/entire_nuswide_model_15.p", "rb"))
+    resnet152_15.cpu()
+    resnet152_15.eval()
 
     # Build Datasets
     print("Building datasets...")
@@ -49,7 +43,7 @@ def init_engine(app):
         transforms.Resize((224,224)),
         transforms.ToTensor(),
         transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
-    image_data = ImageFolder('data/Flickr', transform = image_transform)
+    image_data = ImageFolder(image_directory, transform = image_transform)
     image_from_idx = [i[0] for i in image_data.samples]
     fast_text = FAST_TEXT
     text_from_idx = [None] * len(fast_text)
@@ -68,8 +62,9 @@ def init_engine(app):
     print("Building search engine")
     save_directory = './embeddings'
     search_engine = SearchEngine(["text", "image"], save_directory = save_directory, verbose = True)
-    search_engine.add_model(text_net, "text_net", "text", (300,) , 30)
-    search_engine.add_model(image_net, "image_net", "image", (3, 224, 224), 30)
+    search_engine.add_model(
+        resnet152_15, "ResNet152-15", ["image","text"], [(3, 244, 244), (300,)], 30, 
+        desc = "ResNet152 trained with 15 epochs")
     search_engine.add_dataset("fast_text", text_dataloader, text_from_idx, "text", (300,))
     search_engine.add_dataset("nus-wide", image_dataloader, image_from_idx, "image", (3, 224, 224))
 
@@ -109,19 +104,22 @@ def search(target, modality, n=5):
     print("NEW SEARCH")
     search_engine = app.search_engine
     tensor, modality = target_to_tensor(target, modality)
-    model_name = search_engine.valid_models(tensor, modality)[0]
-    model = search_engine.models[model_name]
+    model_names = search_engine.valid_models(tensor, modality)
+    models = [search_engine.models[model_name] for model_name in model_names]
     print(" -> Modality:    \t", modality)
     print(" -> Tensor Shape:\t", tensor.shape)
     print(" -> Target:      \t '{}'".format(target))
-    print(" -> Model:       \t", model_name)
+    print(" -> models:      \t {}".format(str(model_names))
     if modality == "image":
         # TODO: Make this less dumb
         tensor = tensor[None,:,:,:]
-        embedding = model.get_embedding(tensor)[0]
+        embeddings = [model.get_embedding(tensor)[0] for model in models]
     else:
-        embedding = model.get_embedding(tensor)
+        embeddings = [model.get_embedding(tensor) for model in models]
     all_results = []
+    '''      
+       Everything below this is not updated   
+    '''
     for index_key in search_engine.valid_indexes(embedding):
         dis, idx = search_engine.search(embedding, index_key, n = n)
         result = {
