@@ -26,26 +26,38 @@ class Model():
         desc (string): Description of model
         
         '''
+        assert len(modalities) == len(embedding_functions) == len(input_dimensions)
+
+        self.modalities = {}
+        for i in range(len(modalities)):
+            self.modalities[modalities[i]] = {
+                'embedding_function' = embedding_functions[i]
+                'input_dimension' = tuple(input_dimensions[i])
+                'preprocessing' = []
+            }
+
         self.net = net
         self.name = name
-        self.modalities = modalities
-        self.embedding_functions = embedding_functions
-        self.input_dimensions = input_dimensions
         self.output_dimension = output_dimension
         self.cuda = cuda
+
         if desc is None:
-            desc = name
-        self.desc = desc
+            self.desc = name
+        else:
+            self.desc = desc
+
         if self.cuda:
             self.net.cuda()
         else:
             self.net.cpu()
     
-    def get_embedding(self, tensor, modality):
-        for i in range(len(self.modalities)):
-            if modality == self.modalities[i]:
-                return self.embedding_functions[i](tensor)
-        raise RuntimeError("Modality '{}' not supported by this model".format(modality))
+    def get_embedding(self, tensor, modality, preprocessing = False):
+        modality = self.modalities[modality]
+        if preprocessing:
+            for method in modality['preprocessing']:
+                tensor = method(tensor)
+        assert modality['input_dimension'] == tuple(tensor.shape), "Tensor shape incompatible"
+        return modality['embedding_function'](tensor)
     
     def to_cuda(self):
         return self.net.cuda()
@@ -56,15 +68,17 @@ class Model():
     def get_info(self):
         info = {
             "name": self.name,
-            "modalities": self.modalities,
-            "input_dimensions": self.input_dimensions,
+            "modalities": self.modalities.keys(),
             "output_dimension": self.output_dimension,
             "cuda": self.cuda,
             "desc": self.desc
         }
         return info
-    
 
+    def add_preprocessing(modality, method):
+        self.modalities[modality]['preprocessing'].append(method)
+
+    
 class Dataset():
     '''
     Wrapper class around a dataset
@@ -214,9 +228,8 @@ class SearchEngine():
     def valid_models(self, tensor, modality):
         valid_models = []
         for model in list(self.models.values()):
-            for i in range(len(model.modalities)):
-                if modality == model.modalities[i] and model.input_dimensions[i] == tuple(tensor.shape):
-                    valid_models.append(model.name)
+            if modality in model.modalities
+                valid_models.append(model.name)
         return valid_models
     
     def valid_indexes(self, embedding):
@@ -227,12 +240,11 @@ class SearchEngine():
                 valid_indexes_keys.append(key)
         return valid_indexes_keys
         
-    def get_embedding(self, tensor, model_name, modality, binarized = False, threshold = 0):
+    def get_embedding(self, tensor, model_name, modality, preprocessing = False, binarized = False, threshold = 0):
         assert model_name in self.models, "Model not found"
-        model = self.models[model_name]
-        embedding = model.get_embedding(tensor, modality)
+        embedding = self.models[model_name].get_embedding(tensor, modality, preprocessing)
         if binarized:
-            embedding = binarize(embedding)
+            embedding = binarize(embedding, threshold = threshold)
         return embedding
             
     def search(self, embeddings, index_key, n=5):

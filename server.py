@@ -13,6 +13,7 @@ import json
 import logging
 
 from search import SearchEngine
+from networks import FeatureExtractor
 
 EMBEDDING_DIR = ""
 UPLOAD_DIR = "./uploads"
@@ -28,23 +29,53 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def init_engine(app):
+
+    #Building SearchEngine
+    print("Building search engine")
+    save_directory = './embeddings'
+    search_engine = SearchEngine(["text", "image"], save_directory = save_directory, verbose = True)
+
     # Build Networks
     print("Building networks...")
-    resnet152_15 = pickle.load(open("pickles/models/entire_nuswide_model_15.p", "rb"))
-    resnet152_15.cpu()
-    resnet152_15.eval()
+    resnet152_15 = pickle.load(open("pickles/models/entire_nuswide_model_15.p", "rb")).cpu().eval()
+    search_engine.add_model(
+        resnet152_15, "ResNet152-15", ["image","text"], [(2048,), (300,)], 64, 
+        desc = "ResNet152 trained with 15 epochs")
+    search_engine.models["ResNet152-15"].add_preprocessing("image", FeatureExtractor("resnet152").get_embedding)
+
+    resnet152_5 = pickle.load(open("pickles/models/entire_nuswide_model_5.p", "rb")).cpu().eval()
+    search_engine.add_model(
+        resnet152_5, "ResNet152-5", ["image","text"], [(2048,), (300,)], 64, 
+        desc = "ResNet152 trained with 5 epochs")
+    search_engine.models["ResNet152-5"].add_preprocessing("image", FeatureExtractor("resnet152").get_embedding)
+
+
+    resnet18_5 = pickle.load(open("pickles/models/entire_nuswide_model_5-18.p", "rb")).cpu().eval()
+    search_engine.add_model(
+        resnet152_15, "ResNet18-5", ["image","text"], [(512,), (300,)], 64, 
+        desc = "ResNet18 trained with 5 epochs")
+    search_engine.models["ResNet18-5"].add_preprocessing("image", FeatureExtractor("resnet18").get_embedding)
+    
 
     # Build Datasets
     print("Building datasets...")
+    image_directory = 'data/Flickr'
+    image_from_idx = [i[0] for i in ImageFolder(image_directory).samples]
+
+    image_data18 = np.array([])
+    directory = "data/nuswide_features/resnet18/"
+    filenames = sorted(["{}/{}".format(directory, filename) for filename in os.listdir(directory) if filename[-3:] == "npy"])
+    for filename in filenames:
+        image_data18 = np.append(image_data18, np.load(filename))
+
+    image_data152 = np.array([])
+    directory = "data/nuswide_features/resnet152/"
+    filenames = sorted(["{}/{}".format(directory, filename) for filename in os.listdir(directory) if filename[-3:] == "npy"])
+    for filename in filenames:
+        image_data152 = np.append(image_data152, np.load(filename))
+
     global FAST_TEXT
     FAST_TEXT = pickle.load(open("pickles/word_embeddings/word_embeddings_tensors.p", "rb"))
-    image_directory = 'data/Flickr'
-    image_transform = transforms.Compose([
-        transforms.Resize((224,224)),
-        transforms.ToTensor(),
-        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
-    image_data = ImageFolder(image_directory, transform = image_transform)
-    image_from_idx = [i[0] for i in image_data.samples]
     fast_text = FAST_TEXT
     text_from_idx = [None] * len(fast_text)
     text_data = [None] * len(fast_text)
@@ -55,18 +86,12 @@ def init_engine(app):
     # Build DataLoaders
     print("Building dataloaders...")
     batch_size = 128
-    image_dataloader = DataLoader(image_data, batch_size = batch_size)
+    image18_dataloader = DataLoader(image_data18, batch_size = batch_size)
+    image152_dataloader = DataLoader(image_data152, batch_size = batch_size)
     text_dataloader = DataLoader(text_data, batch_size = batch_size)
-
-    #Building SearchEngine
-    print("Building search engine")
-    save_directory = './embeddings'
-    search_engine = SearchEngine(["text", "image"], save_directory = save_directory, verbose = True)
-    search_engine.add_model(
-        resnet152_15, "ResNet152-15", ["image","text"], [(3, 244, 244), (300,)], 30, 
-        desc = "ResNet152 trained with 15 epochs")
     search_engine.add_dataset("fast_text", text_dataloader, text_from_idx, "text", (300,))
-    search_engine.add_dataset("nus-wide", image_dataloader, image_from_idx, "image", (3, 224, 224))
+    search_engine.add_dataset("nus-wide_18", image18_dataloader, image_from_idx, "image", (512,))
+    search_engine.add_dataset("nus-wide_152", image152_dataloader, image_from_idx, "image", (2048,))
 
     #Build Indexes
     print("Building Indexes")

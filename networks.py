@@ -225,3 +225,31 @@ class ModalityDiscriminator(nn.Module):
 
     def forward(self, embedding):
         return F.softmax(self.fc(embedding), dim=0)
+
+class FeatureExtractor(nn.Module):
+    def __init__(self, net):
+        super(ResNet, self).__init__()
+        if net == "resnet152":
+            net = models.resnet152(pretrained=True)
+            dim = 2048
+        elif net == "resnet18":
+            net = models.resnet18(pretrained=True)
+            dim = 2048
+        else:
+            raise RuntimeException("'{}' not supported".format(net))
+        self.net = net.eval()
+        self.dim = dim
+        self.penult_layer = self.net._modules.get('avgpool')
+    
+    def forward(self, x):
+        output = self.get_embedding(self, x)
+        return output
+    
+    def get_embedding(self, x):
+        embedding = torch.cuda.FloatTensor(x.shape[0], self.dim, 1, 1).fill_(0)
+        def copy(m, i ,o):
+            embedding.copy_(o.data)
+        hook = self.penult_layer.register_forward_hook(copy)
+        self.net(x)
+        hook.remove()
+        return embedding.view(embedding.size()[0], -1)
