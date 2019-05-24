@@ -134,7 +134,7 @@ def search(target, modality, n=5):
     print(" -> Modality:    \t", modality)
     print(" -> Tensor Shape:\t", tensor.shape)
     print(" -> Target:      \t '{}'".format(target))
-    print(" -> models:      \t {}".format(str(model_names))
+    print(" -> models:      \t {}".format(str(model_names)))
     if modality == "image":
         # TODO: Make this less dumb
         tensor = tensor[None,:,:,:]

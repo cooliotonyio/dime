@@ -13,7 +13,7 @@ class Model():
     '''
     
     def __init__(
-        self, name, modalities, embedding_nets, input_dimensions, output_dimension, desc):
+        self, name, modalities, embedding_nets, input_dimensions, output_dimension, desc, cuda = False):
         '''
         Initializes Model obkect
         
@@ -28,18 +28,39 @@ class Model():
         Returns:
         Model: Model object
         '''
-        assert len(modalities) == len(embedding_functions) == len(input_dimensions)
-        self.modalities = {}
+        assert len(modalities) == len(embedding_nets) == len(input_dimensions)
+        self.modalities = {}           
         for i in range(len(modalities)):
             self.modalities[modalities[i]] = {
-                'embedding_function': embedding_functions[i],
+                'embedding_net': embedding_nets[i],
                 'input_dimension': tuple(input_dimensions[i]),
-                'preprocessing_method': None
-            }
+                'preprocessing': None}
         self.name = name
         self.output_dimension = output_dimension
         self.cuda = cuda
         self.desc = desc
+        if cuda:
+            for embedding_net in embedding_nets:
+                try:
+                    embedding_net.cuda()
+                except:
+                    continue
+        
+    def add_preprocessing(self, modality, preprocessor):
+        '''
+        Adds a preprocessing method to a specific embedding_net
+        
+        Paramaters:
+        modality (string): Modality of corresponding embedding_net
+        preprocessor (callable): Preprocessor that is called
+        '''
+        self.modalities[modality]['preprocessing_method'] = preprocessor
+    
+    def batch_embedding(self, batch, modality, preprocessing = False):
+        modality = self.modalities[modality]
+        if preprocessing:
+            batch = modality['preprocessing'](*batch)
+        return modality['embedding_net'](*batch)
     
     def get_embedding(self, tensor, modality, preprocessing = False):
         '''
@@ -55,10 +76,10 @@ class Model():
         '''
         modality = self.modalities[modality]
         if preprocessing:
-            assert modality['preprocessing_method'], "Preprocessing method does not exist"
-            tensor = modality['preprocessing_method'](tensor)
-        assert modality['input_dimension'] == tuple(tensor.shape), "Tensor shape incompatible"
-        return modality['embedding_function'](tensor)
+            assert modality['preprocessing'], "Preprocessing method does not exist"
+            tensor = modality['preprocessing'](tensor)
+        assert modality['input_dimension'] == tuple(tensor.shape), "Tensor shape '{}' incompatible with {}".format(tuple(tensor.shape), modality['input_dimension'])
+        return modality['embedding_net'](tensor)
     
     def get_info(self):
         '''
@@ -78,6 +99,22 @@ class Model():
         }
         return info
     
+    def to_cpu(self):
+        self.cuda = False
+        for modality in self.modalities:
+            try:
+                modality['embedding_net'].cpu()
+            except:
+                continue
+     
+    def to_cuda(self):
+        self.cuda = True
+        for modality in self.modalities:
+            try:
+                modality['embedding_net'].cuda
+            except:
+                continue
+                
 class Dataset():
     '''
     Wrapper class around a dataset
@@ -99,7 +136,7 @@ class Dataset():
         self.modality = modality
         self.dimension = dimension
 
-    def create_loader(self, model, load_embeddings, save_directory, binarized, threshold = 0, cuda = None):
+    def create_loader(self, model, load_embeddings, save_directory, binarized, threshold, cuda):
         '''
         Creates iterable for processing
 
@@ -122,7 +159,7 @@ class Dataset():
                 save_directory, self.name, model.name, "binarized" if binarized else "non_binarized")
             loader = self.load_embeddings(directory, model, binarized)
         else:
-            loader = self.featurize_data(model, binarized, 0, cuda)
+            loader = self.process_data(model, binarized, threshold, 0, cuda)
         return loader
     
     def save_batch(self, batch, filename, binarized, save_directory):
@@ -186,9 +223,9 @@ class Dataset():
             embeddings = self.load_batch(filenames[batch_idx], model, binarized)
             yield batch_idx, embeddings
     
-    def featurize_data(self, model, binarized, offset, cuda, threshold):
+    def process_data(self, model, binarized, threshold, offset, cuda):
         '''
-        Generator function that takes in a model and returns the features of dataset
+        Generator function that takes in a model and returns the embeddings of dataset
         
         Parameters:
         model (Model): Model used to extract features
@@ -201,13 +238,13 @@ class Dataset():
         int: Batch index
         arraylike: Embeddings received from passing data through net
         '''
-        for batch_idx, (data, target) in enumerate(self.data_loader):
+        for batch_idx, batch in enumerate(self.data):
             if batch_idx >= offset:
-                if not type(data) in (tuple, list):
-                    data = (data,)
+                if not type(batch) in (tuple, list):
+                    batch = (batch,)
                 if cuda:
-                    data = tuple(d.cuda() for d in data)
-                embeddings = model.get_embedding(*data, self.modality)
+                    batch = tuple(d.cuda() for d in batch)
+                embeddings = model.batch_embedding(batch, self.modality)
                 if binarized:
                     embeddings = binarize(embeddings.detach(), threshold=threshold)
                 yield batch_idx, embeddings.cpu().detach().numpy()
@@ -339,7 +376,7 @@ class SearchEngine():
 
         if desc is None:
             desc = name
-        model = Model(name, modalities, embedding_functions, input_dimensions, output_dimension, desc)
+        model = Model(name, modalities, embedding_nets, input_dimensions, output_dimension, desc)
         self.models[name] = model
         for modality in modalities:
             self.modalities[modality]['models'].append(name)
@@ -367,7 +404,7 @@ class SearchEngine():
         self.datasets[name] = dataset
         self.modalities[dataset.modality]['datasets'].append(dataset.name)
 
-    def build_index(self, model_name, dataset_name, binarized=False, threshold = 0, load_embeddings = True, 
+    def build_index(self, dataset_name, model_name, binarized=False, threshold = 0, load_embeddings = True, 
         save_embeddings = True, batch_size = 128, step_size = 1000):
         '''
         Adds model embeddings of dataset to index
@@ -387,23 +424,23 @@ class SearchEngine():
         '''
 
         dataset = self.datasets[dataset_name]
-        models = self.models[model_name]
+        model = self.models[model_name]
 
         assert not save_embeddings or self.save_directory, "save_directory not specified"
         assert dataset.modality in model.modalities, "Model does not support dataset modality"
-
-        index = faiss.IndexFlatL2(model.output_dimension)
-        #TODO: Cuda() index
-        data_loader = dataset.create_loader(
-            model, binarized, threshold, self.save_directory, load_embeddings, batch_size, self.cuda)
         
-        #TODO: fix num_batches
-        num_batches = 10000
-        batch_magnitude = len(str(num_batches))
-
         if self.verbose:
             start_time = time.time()
             print("Building {}, {} index".format(model.name, dataset.name))
+
+        index = faiss.IndexFlatL2(model.output_dimension)
+        #TODO: Cuda() index
+        
+        data_loader = dataset.create_loader(model, load_embeddings, self.save_directory, binarized, threshold, self.cuda)
+
+        #TODO: fix num_batches
+        num_batches = 10000
+        batch_magnitude = len(str(num_batches))
 
         for batch_idx, embeddings in data_loader:
             if self.verbose and not (batch_idx % step_size):

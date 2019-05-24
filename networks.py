@@ -228,7 +228,7 @@ class ModalityDiscriminator(nn.Module):
 
 class FeatureExtractor(nn.Module):
     def __init__(self, net):
-        super(ResNet, self).__init__()
+        super(FeatureExtractor, self).__init__()
         if net == "resnet152":
             net = models.resnet152(pretrained=True)
             dim = 2048
