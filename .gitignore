@@ -3,3 +3,5 @@ data_zipped/
 __pycache__
 .ipynb_checkpoints
 pickles/
+embeddings/
+uploads/
