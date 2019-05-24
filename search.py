@@ -156,7 +156,7 @@ class Dataset():
         
         if load_embeddings:
             directory = "{}/{}/{}/{}".format(
-                save_directory, self.name, model.name, "binarized" if binarized else "non_binarized")
+                save_directory, self.name, model.name, "binarized" if binarized else "unbinarized")
             loader = self.load_embeddings(directory, model, binarized)
         else:
             loader = self.process_data(model, binarized, threshold, 0, cuda)
@@ -355,7 +355,7 @@ class SearchEngine():
             return distances, idxs
     
     def add_model(self, name, modalities, embedding_nets, 
-                  input_dimensions, output_dimension, desc=None):
+                  input_dimensions, output_dimension, desc=None, force_add = False):
         '''
         Add model to SearchEngine
 
@@ -370,8 +370,8 @@ class SearchEngine():
         Returns:
         None
         '''
-
-        assert (name not in self.models), "Model with given name already in self.models"
+        if not force_add:
+            assert (name not in self.models), "Model with given name already in self.models"
 
         if desc is None:
             desc = name
@@ -379,8 +379,11 @@ class SearchEngine():
         self.models[name] = model
         for modality in modalities:
             self.modalities[modality]['models'].append(name)
+        
+        if self.verbose:
+            print("Model '{}' added".format(name))
 
-    def add_dataset(self, name, data, targets, modality, dimension):
+    def add_dataset(self, name, data, targets, modality, dimension, force_add = False):
         '''
         Initializes dataset object
 
@@ -396,12 +399,15 @@ class SearchEngine():
         Returns:
         None
         '''
-
-        assert (name not in self.datasets), "Dataset with dataset_name already in self.datasets"
+        if not force_add:
+            assert (name not in self.datasets), "Dataset with dataset_name already in self.datasets"
         assert (modality in self.modalities), "Modality not supported by SearchEngine"
         dataset = Dataset(name, data, targets, modality, dimension)
         self.datasets[name] = dataset
         self.modalities[dataset.modality]['datasets'].append(dataset.name)
+        
+        if self.verbose:
+            print("Dataset '{}' added".format(name))
 
     def build_index(self, dataset_name, model_name, binarized=False, threshold = 0, load_embeddings = True, 
         save_embeddings = True, batch_size = 128, step_size = 1000):
@@ -428,39 +434,40 @@ class SearchEngine():
         assert not save_embeddings or self.save_directory, "save_directory not specified"
         assert dataset.modality in model.modalities, "Model does not support dataset modality"
         save_directory = "{}/{}/{}/{}/".format(self.save_directory, dataset.name, model.name,
-                                                      "binarized" if binarized else "non_binarized")
+                                                      "binarized" if binarized else "unbinarized")
         if not os.path.exists(save_directory):
             os.makedirs(save_directory)
         
         if self.verbose:
             start_time = time.time()
             print("Building {}, {} index".format(model.name, dataset.name))
-
-        index = faiss.IndexFlatL2(model.output_dimension)
+            
         #TODO: Cuda() index
-        
-        data_loader = dataset.create_loader(model, load_embeddings, self.save_directory, binarized, threshold, self.cuda)
+        index = faiss.IndexFlatL2(model.output_dimension)
+        loader = dataset.create_loader(model, load_embeddings, self.save_directory, binarized, threshold, self.cuda)
 
         #TODO: fix num_batches
         num_batches = 10000
         batch_magnitude = len(str(num_batches))
 
-        for batch_idx, embeddings in data_loader:
+        for batch_idx, embeddings in loader:
             if self.verbose and not (batch_idx % step_size):
                 print("Batch {} of {}".format(batch_idx, num_batches))
             if save_embeddings:
                 filename = "batch_{}".format(str(batch_idx).zfill(batch_magnitude))
                 dataset.save_batch(embeddings, filename, binarized, save_directory)
             index.add(embeddings)
-        
-        if self.verbose:
-            time_elapsed = time.time() - start_time
-            print("Finished building {} index in {} seconds.".format(model.name, round(time_elapsed, 4)))
+
 
         key = (dataset.name, model.name, binarized)
+        
         self.indexes[key] = index
         self.modalities[dataset.modality]['indexes'].append(key)
         self.modalities[dataset.modality]['indexes'] = list(set(self.modalities[dataset.modality]['indexes']))
+        
+        if self.verbose:
+            time_elapsed = time.time() - start_time
+            print("Finished building {} index in {} seconds.".format(str(key), round(time_elapsed, 4)))
 
         return key
         
