@@ -176,7 +176,6 @@ class Dataset():
         Returns:
         None
         '''
-        
         path = "{}/{}.npy".format(save_directory, filename)
         if binarized:
             np.save(path, np.packbits(batch.astype(bool)))
@@ -330,7 +329,7 @@ class SearchEngine():
             embedding = binarize(embedding, threshold = threshold)
         return embedding
             
-    def search(self, embeddings, index_key = None, n=5):
+    def search(self, embeddings, index_key, n=5):
         '''
         Searches index for nearest n neighbors for embedding(s)
 
@@ -428,6 +427,10 @@ class SearchEngine():
 
         assert not save_embeddings or self.save_directory, "save_directory not specified"
         assert dataset.modality in model.modalities, "Model does not support dataset modality"
+        save_directory = "{}/{}/{}/{}/".format(self.save_directory, dataset.name, model.name,
+                                                      "binarized" if binarized else "non_binarized")
+        if not os.path.exists(save_directory):
+            os.makedirs(save_directory)
         
         if self.verbose:
             start_time = time.time()
@@ -446,11 +449,8 @@ class SearchEngine():
             if self.verbose and not (batch_idx % step_size):
                 print("Batch {} of {}".format(batch_idx, num_batches))
             if save_embeddings:
-                filename = "{}/{}/{}/batch_{}".format(
-                    dataset.name, model.name, 
-                    "binarized" if binarized else "non_binarized", 
-                    str(batch_idx).zfill(batch_magnitude))
-                dataset.save_batch(embeddings, filename, binarized, self.save_directory)
+                filename = "batch_{}".format(str(batch_idx).zfill(batch_magnitude))
+                dataset.save_batch(embeddings, filename, binarized, save_directory)
             index.add(embeddings)
         
         if self.verbose:
