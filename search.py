@@ -54,7 +54,12 @@ class Model():
         modality (string): Modality of corresponding embedding_net
         preprocessor (callable): Preprocessor that is called
         '''
-        self.modalities[modality]['preprocessing_method'] = preprocessor
+        self.modalities[modality]['preprocessing'] = preprocessor
+        if self.cuda:
+            try:
+                self.modalities[modality]['preprocessing'] = preprocessor.cuda()
+            except:
+                pass
     
     def batch_embedding(self, batch, modality, preprocessing = False):
         modality = self.modalities[modality]
@@ -74,11 +79,13 @@ class Model():
         Returns:
         arraylike: Embedding produced by model based on tensor and the modality
         '''
+        if self.cuda:
+            tensor = tensor.cuda()
         modality = self.modalities[modality]
-        if preprocessing:
-            assert modality['preprocessing'], "Preprocessing method does not exist"
+        if preprocessing and modality['preprocessing']:
             tensor = modality['preprocessing'](tensor)
-        assert modality['input_dimension'] == tuple(tensor.shape), "Tensor shape '{}' incompatible with {}".format(tuple(tensor.shape), modality['input_dimension'])
+        assert modality['input_dimension'] == tuple(tensor.shape), "Tensor shape '{}' incompatible with {}".format(
+                                                                   tuple(tensor.shape), modality['input_dimension'])
         return modality['embedding_net'](tensor)
     
     def get_info(self):
@@ -103,7 +110,9 @@ class Model():
         self.cuda = False
         for modality in self.modalities:
             try:
-                modality['embedding_net'].cpu()
+                modality['embedding_net'] = modality['embedding_net'].cpu()
+                if modality['preprocessing']:
+                    modality['preprocessing'] = modality['preprocessing'].cpu()
             except:
                 continue
      
@@ -111,7 +120,9 @@ class Model():
         self.cuda = True
         for modality in self.modalities:
             try:
-                modality['embedding_net'].cuda
+                modality['embedding_net'] = modality['embedding_net'].cuda()
+                if modality['preprocessing']:
+                    modality['preprocessing'] = modality['preprocessing'].cuda()
             except:
                 continue
                 
@@ -253,7 +264,7 @@ class SearchEngine():
     Search Engine Class
     '''
 
-    def __init__(self, modalities, save_directory = None, cuda = False, verbose = False):
+    def __init__(self, modalities, save_directory = None, cuda = True, verbose = False):
         '''
         Initializes SearchEngine object
         
@@ -300,7 +311,7 @@ class SearchEngine():
         for model in list(self.models.values()):
             if modality in model.modalities:
                 submodel = model.modalities[modality]
-                if submodel['input_dimension'] == tuple(tensor.shape) or submodel['preprocessing_method']:
+                if submodel['input_dimension'] == tuple(tensor.shape) or submodel['preprocessing']:
                     valid_models.append(model.name)
         for key in self.indexes:
             dataset_name, model_name, binarized = key
@@ -324,7 +335,9 @@ class SearchEngine():
         arraylike: Embedding of the tensor with the model
         '''
         assert model_name in self.models, "Model not found"
-        embedding = self.models[model_name].get_embedding(tensor, modality, preprocessing)
+        if self.cuda:
+            tensor = tensor.cuda()
+        embedding = self.models[model_name].get_embedding(tensor, modality, preprocessing).detach().cpu()
         if binarized:
             embedding = binarize(embedding, threshold = threshold)
         return embedding
@@ -375,7 +388,7 @@ class SearchEngine():
 
         if desc is None:
             desc = name
-        model = Model(name, modalities, embedding_nets, input_dimensions, output_dimension, desc)
+        model = Model(name, modalities, embedding_nets, input_dimensions, output_dimension, desc, cuda=self.cuda)
         self.models[name] = model
         for modality in modalities:
             self.modalities[modality]['models'].append(name)
