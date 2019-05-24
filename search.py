@@ -100,7 +100,7 @@ class Model():
         '''
         info = {
             "name": self.name,
-            "modalities": self.modalities.keys(),
+            "modalities": list(self.modalities.keys()),
             "output_dimension": self.output_dimension,
             "desc": self.desc
         }

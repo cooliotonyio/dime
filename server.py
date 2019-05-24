@@ -96,7 +96,8 @@ def search(target, modality, n=5, model = None):
             "idx": [int(i) for i in idx],
             "data": [str(x) for x in search_engine.target_from_idx(idx, index_key)],
             "modality": search_engine.datasets[dataset_name].modality,
-            "num_results": n
+            "num_results": n,
+            "model_info": search_engine.models[model_name].get_info()
         })
     
     print("SEARCH FINISHED, RETURNING {} RESULTS FROM {} INDEXES\n".format(n, len(target_indexes)))
@@ -136,13 +137,20 @@ def query(modality):
             num_results = int(request.values["num_results"])
         else:
             num_results = 10
+            
+        if "index_key" in request.values:
+            #TODO: make this cleaner somehow
+            index_key = str(request.values["index_key"])
+            model = [(i.strip()) for i in index_key[1:-1].split(",")][1][1:-1]
+        else:
+            model = None
         
         # Search and return results
-        results, valid_indexes, input_modality = search(target, modality, n=num_results)
+        results, valid_indexes, input_modality = search(target, modality, n = num_results, model = model)
         response = {
             "input_target": target,
             "input_modality": input_modality,
-            "num_sets": valid_indexes,
+            "valid_indexes": valid_indexes,
             "num_results": num_results,
             "results": results
         }
