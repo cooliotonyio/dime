@@ -9,7 +9,7 @@ class Image extends React.Component {
           src={this.props.source}
           onClick ={(event) => this.props.clickHandler(this.props)}>
         </img>
-        <p>Distance = {this.props.distance}</p>
+        {/* <p>Distance = {this.props.distance}</p> */}
       </div>
     )
   }
@@ -73,12 +73,15 @@ class Modal extends React.Component {
     return (
       <div id="modalMetadata">
         <h2>Metadata</h2>
-        <h5>Distance: {data.distance}</h5>
-        <h5>Dataset: {data.dataset}</h5>
-        <h5>Binarized: {data.binarized.toString()}</h5>
-        <h5>Index: {data.idx}</h5>
-        <h5>Model: {data.model}</h5>
-        <h5>Source: <a href={data.source}>{data.source}</a></h5>
+        <p>
+          Distance: {data.distance}<br/>
+          Dataset: {data.dataset}<br/>
+          Binarized: {data.binarized.toString()}<br/>
+          Index: {data.idx}<br/>
+          Model: {data.model}<br/>
+          Model Desc: {data.model_info.desc}<br/>
+          Model Output Dim: {data.model_info.output_dimension}<br/>
+          Source: <a href={data.source}>{data.source}</a></p>
       </div>
     )
   }
@@ -151,7 +154,7 @@ class Header extends React.Component {
 
   create_tags() {
     var tags = "";
-    for (var i = 0; i < this.props.data.num_datasets; i++) {
+    for (var i = 0; i < this.props.data.results.length; i++) {
       var result = this.props.data.results[i];
       if (result.modality == "text") {
         for (var j = 0; j < result.num_results; j++) {
@@ -204,20 +207,28 @@ class ResultsHeader extends React.Component {
     let tabs = [];
     for (var i = 0; i < this.props.datasets.length; i++){
       let dataset = this.props.datasets[i];
-      if (dataset.modality != "text"){
-        if (dataset.dataset === this.props.currentDataset.dataset) {
+      if (dataset[3] != "text"){
+        if (dataset[0] === this.props.currentDataset.dataset && dataset[1] === this.props.currentDataset.model) {
           var button_class = "btn btn-primary";
         } else {
           var button_class = "btn btn-secondary";
-        }
+        } 
         tabs.push(
-          <button 
-            key = {i}
-            type="button" 
-            className={button_class} 
-            onClick ={(event)=>{this.props.changeDatasetHandler(dataset)}}>
-            {dataset.dataset} with {dataset.model}
-          </button>);
+          <form action="/query/prev_query" method="POST" key = {i}>
+            <div className="form-group d-none">
+              <input name="query_input" type="text" value={this.props.query_input} readOnly/>
+              <input name="dataset"  type="text" value={dataset[0]} readOnly/>
+              <input name="model"  type="text" value={dataset[1]} readOnly/>
+              <input name="binarized" type="text" value={dataset[2]} readOnly/>
+              <input name="modality" type="text" value={this.props.input_modality} readOnly/>
+              <input name="num_results" type="text" value={this.props.num_results} readOnly/>
+            </div>
+            <button 
+              type="submit" 
+              className={button_class}>
+              {dataset[0]} with {dataset[1]}
+            </button>
+          </form>);
       }
     }
     return tabs
@@ -262,6 +273,7 @@ class ResultsBody extends React.Component {
           dataset={dataset.dataset}
           model={dataset.model}
           binarized={dataset.is_binarized}
+          model_info={dataset.model_info}
           clickHandler={this.props.clickHandler}>
         </Image>
       );        
@@ -282,8 +294,7 @@ class ResultsBody extends React.Component {
 class Results extends React.Component{
   constructor(props) {
     super(props);
-    this.changeDatasetHandler = this.changeDatasetHandler.bind(this);
-    for (var i = 0; i < this.props.data.num_datasets; i++) {
+    for (var i = 0; i < this.props.data.results.length; i++) {
       var dataset = this.props.data.results[i];
       if (dataset.modality == "image") {
         this.state = {"dataset": dataset};
@@ -292,19 +303,14 @@ class Results extends React.Component{
     }
   }
 
-  changeDatasetHandler (dataset) {
-    this.setState({
-      "dataset" : dataset
-    });
-  }
-
   render() {
     return (
       <div id="results">
         <ResultsHeader 
-          datasets = {this.props.data.results} 
+          datasets = {this.props.data.valid_indexes} 
           currentDataset = {this.state.dataset}
-          changeDatasetHandler = {this.changeDatasetHandler}/>
+          query_input = {this.props.data.query_input}
+          input_modality = {this.props.data.input_modality}/>
         <ResultsBody 
           dataset = {this.state.dataset}
           url = {this.props.data.engine_url}
@@ -343,6 +349,7 @@ class Content extends React.Component {
           data={this.state.data}/>
         <Results 
           data={this.state.data} 
+          num_results={this.state.data.num_results}
           clickHandler={this.showModal}/>
         <Modal 
           show={this.state.show} 

@@ -12,7 +12,7 @@ ENGINE_URL = "http://3.212.166.121"
 def make_request(request, modality):
     data = {}
     if "num_results" in request.values:
-        data["num_results"] = request.values["num_results"]
+        data["num_results"] = int(request.values["num_results"])
     else:
         data["num_results"] = 30
 
@@ -26,7 +26,7 @@ def make_request(request, modality):
         if "file" in request.files:
             f = request.files["file"]
             if f.filename and allowed_file(f.filename.strip()):
-                filename = f.filename.strip().replace(" ","")
+                filename = secure_filename(f.filename.strip())
                 query_input = ENGINE_URL + "/uploads/" + filename
                 files = {"file": (filename, f)}
                 r = requests.post(query_url, files = files, data = data)
@@ -44,13 +44,25 @@ def make_request(request, modality):
             "num_results": request.values["num_results"]
         }
         r = requests.post(query_url, data = data)
+    elif "prev_query" == modality:
+        query_input = request.values["query_input"].split("/")[-1]
+        print(query_input)
+        dataset = request.values["dataset"]
+        model = request.values["model"]
+        binarized =request.values["binarized"]
+        data = {
+            "query_input": query_input,
+            "index_key": str([dataset, model, binarized]),
+            "modality": request.values["modality"]
+        }
+        r = requests.post(query_url, data = data)
     else:
         raise ValueError("Modality '{}' not supported".format(modality))
 
     try:
         return r.json(), query_input
     except:
-        raise RuntimeError(r.content.decode())
+        raise RuntimeError("Error decoding response from server: {}".format(r))
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -68,10 +80,10 @@ def query(modality):
             data = {
                 "engine_url": ENGINE_URL,
                 "input_modality": response["input_modality"],
-                "num_datasets": response["num_sets"],
+                "valid_indexes": response["valid_indexes"],
                 "num_results": response["num_results"],
                 "query_input": query_input,
-                "results": response["results"]
+                "results": response["results"],
             }
             return render_template("results.html", data = json.dumps(data))
         except Exception as err:
