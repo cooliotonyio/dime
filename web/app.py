@@ -11,7 +11,8 @@ ENGINE_URL = "http://3.212.166.121"
 
 def make_request(request, modality):
     data = {}
-    if "num_results" in request.values:
+
+    if "num_results" in request.values and request.values["num_results"]:
         data["num_results"] = int(request.values["num_results"])
     else:
         data["num_results"] = 30
@@ -62,7 +63,7 @@ def make_request(request, modality):
     try:
         return r.json(), query_input
     except:
-        raise RuntimeError("Error decoding response from server: {}".format(r))
+        raise RuntimeError("Error decoding response from server: {}".format(r.content.decode()))
 
 def allowed_file(filename):
     return '.' in filename and \
