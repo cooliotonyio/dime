@@ -19,7 +19,7 @@ from networks import FeatureExtractor
 EMBEDDING_DIR = ""
 UPLOAD_DIR = "uploads/"
 DATA_DIR = "data/"
-IMAGE_DIR = 'data/Flickr'
+IMAGE_DIR = 'data/Flickr/'
 ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg'])
 FAST_TEXT = None
 EMBED_DIR = 'embeddings/'
@@ -50,17 +50,17 @@ def target_to_tensor(target, modality):
     elif "dataset" == modality:
         dataset_name, idx = target
         assert dataset_name in search_engine.datasets, "Target dataset '{}' not a valid dataset".format(dataset_name)
-        new_target = search_engine.data_from_idx(dataset_name, idx)[0]
+        new_target = search_engine.target_from_idx(idx, dataset_name)[0]
         new_modality = search_engine.datasets[dataset_name].modality
-        tensor, modality = target_to_tensor(new_target, new_modality)
+        tensor, modality, target = target_to_tensor(new_target, new_modality)
     else:
         raise ValueError("Modality '{}' not supported".format(modality))
-    return tensor, modality
+    return tensor, modality, target
 
 def search(target, modality, n=5, model = None):
     print("NEW SEARCH")
     search_engine = app.search_engine
-    tensor, modality = target_to_tensor(target, modality)
+    tensor, modality, target = target_to_tensor(target, modality)
     valid_indexes = search_engine.valid_indexes(tensor, modality)
     
     if model is None:
@@ -101,6 +101,7 @@ def search(target, modality, n=5, model = None):
         })
     
     print("SEARCH FINISHED, RETURNING {} RESULTS FROM {} INDEXES\n".format(n, len(target_indexes)))
+    valid_indexes = [list(i) + [search_engine.datasets[i[0]].modality] for i in valid_indexes]
     return results, valid_indexes, modality
             
 @app.route('/uploads/<path:filename>')
@@ -129,6 +130,19 @@ def query(modality):
                 raise RuntimeError("No file attached to request")
         elif "dataset" == modality:
             target = [request.values["dataset"], int(request.values["target"])]
+        elif "prev_query" == modality:
+            modality = request.values["modality"]
+            if modality == "image":
+                upload_target = os.path.join(UPLOAD_DIR, request.values["query_input"])
+                dataset_target = os.path.join(IMAGE_Dir, request.values["query_input"])
+                if os.path.isfile(upload_target):
+                    target = upload_target
+                elif os.path.isfile(dataset_target):
+                    target = dataset_target
+                else:
+                    raise RuntimeError("Precious Query target '{}' not found".format(request.values["query_input"]))
+            else:
+                target = request.values["query_input"]
         else:
             raise RuntimeError("Modality '{}' not supported".format(modality))
         

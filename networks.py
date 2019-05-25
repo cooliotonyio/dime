@@ -234,10 +234,10 @@ class FeatureExtractor(nn.Module):
             dim = 2048
         elif net == "resnet18":
             net = models.resnet18(pretrained=True)
-            dim = 2048
+            dim = 512
         else:
             raise RuntimeException("'{}' not supported".format(net))
-        self.net = net.eval()
+        self.net = net.eval().cuda()
         self.dim = dim
         self.penult_layer = self.net._modules.get('avgpool')
     

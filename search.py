@@ -84,8 +84,6 @@ class Model():
         modality = self.modalities[modality]
         if preprocessing and modality['preprocessing']:
             tensor = modality['preprocessing'](tensor)
-        assert modality['input_dimension'] == tuple(tensor.shape), "Tensor shape '{}' incompatible with {}".format(
-                                                                   tuple(tensor.shape), modality['input_dimension'])
         return modality['embedding_net'](tensor)
     
     def get_info(self):
