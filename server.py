@@ -54,7 +54,7 @@ def target_to_tensor(target, modality):
         new_modality = search_engine.datasets[dataset_name].modality
         tensor, modality, target = target_to_tensor(new_target, new_modality)
     else:
-        raise ValueError("Modality '{}' not supported".format(modality))
+        raise ValueError("Modality '{}' not supported in target_to_tensor".format(modality))
     return tensor, modality, target
 
 def search(target, modality, n=5, model = None):
@@ -133,18 +133,13 @@ def query(modality):
         elif "prev_query" == modality:
             modality = request.values["modality"]
             if modality == "image":
-                upload_target = os.path.join(UPLOAD_DIR, request.values["query_input"])
-                dataset_target = os.path.join(IMAGE_Dir, request.values["query_input"])
-                if os.path.isfile(upload_target):
-                    target = upload_target
-                elif os.path.isfile(dataset_target):
-                    target = dataset_target
-                else:
-                    raise RuntimeError("Precious Query target '{}' not found".format(request.values["query_input"]))
-            else:
-                target = request.values["query_input"]
+                target = os.path.join(UPLOAD_DIR, request.values["file"])
+            elif modality == "dataset":
+                target = [request.values["dataset"], int(request.values["target"])]
+            elif modality == "text":
+                target = request.values["text"]
         else:
-            raise RuntimeError("Modality '{}' not supported".format(modality))
+            raise RuntimeError("Modality '{}' not supported in query".format(modality))
         
         # Figure out how many results
         if "num_results" in request.values:
