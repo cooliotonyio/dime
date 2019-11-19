@@ -13,11 +13,12 @@ import io
 import torch
 import pickle
 import tarfile
+import time
 from zipfile import ZipFile
 from util import fetch_and_cache
 
 FORCE_DOWNLOAD = False
-
+start_time = time.time()
 print("Starting setup... This might take a while.")
 print("Making directories...", end=" ")
 if not os.path.isdir("./data_zipped"):
@@ -39,10 +40,14 @@ fetch_and_cache(data_url = 'http://dl.nextcenter.org/public/nuswide/NUS_WID_Tags
                 force = FORCE_DOWNLOAD)
 fetch_and_cache(data_url = 'http://dl.nextcenter.org/public/nuswide/Groundtruth.zip',
                 file = 'groundtruth.zip',
-                data_dir = './data_zipped'.
+                data_dir = './data_zipped',
                 force = FORCE_DOWNLOAD)
 fetch_and_cache(data_url = 'http://dl.nextcenter.org/public/nuswide/ConceptsList.zip',
                 file = 'concepts.zip',
+                data_dir = './data_zipped',
+                force = FORCE_DOWNLOAD)
+fetch_and_cache(data_url = 'http://dl.nextcenter.org/public/nuswide/ImageList.zip',
+                file = 'imagelist.zip',
                 data_dir = './data_zipped',
                 force = FORCE_DOWNLOAD)
 
@@ -53,6 +58,8 @@ with ZipFile('data_zipped/groundtruth.zip', 'r') as data_zipped:
     data_zipped.extractall(path = "data/nuswide_metadata/")
 with ZipFile('data_zipped/concepts.zip', 'r') as data_zipped:
     data_zipped.extractall(path = "data/nuswide_metadata/")
+with ZipFile('data_zipped/imagelist.zip', 'r') as data_zipped:
+    data_zipped.extractall(path = "data/nuswide_metadata/")
 print("Done extracting NUSWIDE metadata!")
 
 
@@ -60,6 +67,8 @@ print("Processing and pickling NUSWIDE metadata...")
 os.system("python3 nuswide_processing_scripts/make_relevancy_matrix.py")
 os.system("python3 nuswide_processing_scripts/make_tag_matrix.py")
 os.system("python3 nuswide_processing_scripts/make_concepts.py")
+os.system("python3 nuswide_processing_scripts/filter_concepts.py")
+os.system("python3 nuswide_processing_scripts/make_nuswide_folder_labels.py")
 print("Done processing and pickling NUSWIDE metadata!")
 
 print("Downloading the FastText word embeddings... (this might take some time)")
@@ -99,4 +108,9 @@ image_data = tarfile.open("./data_zipped/flickr.tar.gz")
 image_data.extractall(path='./data')
 print("Done extracting NUSWIDE!")
 
-print("Finished setup!")
+print("Extracting NUSWIDE ResNet features... (this will take a lot of time)")
+os.system("python3 feature_extractors/resnet152_nuswide_processor.py")
+os.system("python3 feature_extractors/resnet18_nuswide_processor.py")
+print("Done extracting features!")
+
+print("Finished setup in {} seconds!".format(time.time() - start_time))

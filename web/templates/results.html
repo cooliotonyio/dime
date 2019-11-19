@@ -1,0 +1,19 @@
+{% extends "_template.html" %}
+
+{% block style %}
+  <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='css/results.css')}}"/>
+{% endblock %}
+
+{% block content%}
+<div id="content"></div>
+<canvas id="myChart" width="400" height="400"></canvas>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0/dist/Chart.min.js"></script>
+<script type="text/jsx" src="{{url_for('static', filename='js/results.js')}}"></script>
+<script type="text/jsx">
+  var content = <Content data="{{data}}"/>;
+  ReactDOM.render(content, document.getElementById("content"));
+</script>
+{% endblock %}
