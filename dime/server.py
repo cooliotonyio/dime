@@ -13,25 +13,27 @@ import PIL
 import pickle
 import numpy as np
 
-from search import SearchEngine
+from dime.engine import SearchEngine
 from networks import FeatureExtractor
 
 EMBEDDING_DIR = ""
 UPLOAD_DIR = "uploads/"
 DATA_DIR = "data/"
-IMAGE_DIR = 'data/Flickr/'
-ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg'])
+IMAGE_DIR = "data/Flickr/"
+ALLOWED_EXTENSIONS = set(["png", "jpg", "jpeg"])
 FAST_TEXT = None
-EMBED_DIR = 'embeddings/'
+EMBED_DIR = "embeddings/"
 BATCH_SIZE = 128
 LOAD_EMBED = True
 
 app = Flask(__name__)
-logging.getLogger('werkzeug').setLevel(logging.ERROR)
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
+
+#TODO: Clean this file up holy moly
 
 def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return "." in filename and \
+           filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
     
 def target_to_tensor(target, modality):
     search_engine = app.search_engine
@@ -104,15 +106,15 @@ def search(target, modality, n=5, model = None):
     valid_indexes = [list(i) + [search_engine.datasets[i[0]].modality] for i in valid_indexes]
     return results, valid_indexes, modality
             
-@app.route('/uploads/<path:filename>')
+@app.route("/uploads/<path:filename>")
 def uploads(filename):
     return send_from_directory(UPLOAD_DIR, filename, as_attachment=True)
 
-@app.route('/data/<path:filename>')
+@app.route("/data/<path:filename>")
 def data(filename):
     return send_from_directory(DATA_DIR, filename, as_attachment=True)
 
-@app.route('/query/<modality>', methods=["POST"])
+@app.route("/query/<modality>", methods=["POST"])
 def query(modality):
     try:
         # Determine modality and target
@@ -232,7 +234,7 @@ def init_engine(app):
     filenames = sorted(["{}/{}".format(directory_152, filename) 
                         for filename in os.listdir(directory_152) if filename[-3:] == "npy"])
     for filename in filenames:
-        image_data152 = np.append(image_data152, np.load(filename).astype('float32'))
+        image_data152 = np.append(image_data152, np.load(filename).astype("float32"))
     image_data152.resize(len(image_data152) // 2048, 2048)
     image_data152 = torch.from_numpy(image_data152).cuda().float()
     
@@ -288,6 +290,6 @@ def init_engine(app):
 if __name__ == "__main__":
     init_engine(app)
     app.run(
-        host=os.getenv('LISTEN', '0.0.0.0'),
-        port=int(os.getenv('PORT', '80'))
+        host=os.getenv("LISTEN", "0.0.0.0"),
+        port=int(os.getenv("PORT", "80"))
     )

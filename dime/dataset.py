@@ -1,4 +1,5 @@
 from sklearn.preprocessing import binarize
+import numpy as np
 
 class Dataset():
     """
@@ -6,7 +7,7 @@ class Dataset():
     """
     def __init__(self, name, data, targets, modality, dimension):
         """
-        Initializes dataset object
+        Wrapper class around a dataset
 
         Parameters:
         name (string): Name of dataset
@@ -37,7 +38,7 @@ class Dataset():
         iterable: Iterable that yields batches
         """
         
-        #TODO: enable loading saved_embeddings midway
+        #TODO: enable loading saved_embeddings midway by giving a batch index
         
         if load_embeddings:
             directory = "{}/{}/{}/{}".format(
@@ -49,6 +50,7 @@ class Dataset():
     
     def save_batch(self, batch, filename, binarized, save_directory):
         """
+        #TODO move to index.py
         Saves batch into a filename into .npy file
         Does bitpacking if batches are binarized to drastically reduce size of files
         
@@ -69,6 +71,7 @@ class Dataset():
                 
     def load_batch(self, filename, model, binarized):
         """
+        #TODO move to index.py
         Load batch from a filename, does bit unpacking if embeddings are binarized
         
         Called by SearchEngine.load_embeddings()
@@ -91,6 +94,7 @@ class Dataset():
     
     def load_embeddings(self, directory, model, binarized):
         """
+        #TODO move to index.py
         Loads previously saved embeddings from save_directory
         
         Parameters:
@@ -109,6 +113,7 @@ class Dataset():
     
     def process_data(self, model, binarized, threshold, offset, cuda):
         """
+        TODO: Split and move to engine.py
         Generator function that takes in a model and returns the embeddings of dataset
         
         Parameters:

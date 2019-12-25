@@ -7,13 +7,12 @@ import time
 from torchvision import transforms
 
 class SearchEngine():
-    '''
+    """
     Search Engine Class
-    '''
+    """
 
     def __init__(self, modalities, save_directory = None, cuda = True, verbose = False):
-        '''
-        Initializes SearchEngine object
+        """Initializes SearchEngine object
         
         Parameters:
         modalities (list of strings): Modalities supported by this SearchEngine object
@@ -23,7 +22,7 @@ class SearchEngine():
         
         Returns:
         SearchEngine: SearchEngine object
-        '''
+        """
         
         self.cuda = cuda
         self.save_directory = save_directory
@@ -43,7 +42,7 @@ class SearchEngine():
             }
             
     def valid_indexes(self, tensor, modality):
-        '''
+        """
         Returns a list of all indexes that are valid given a tensor and modality
 
         Parameters:
@@ -52,7 +51,7 @@ class SearchEngine():
 
         Returns:
         (list of tuples): Keys of valid indexes
-        '''
+        """
         valid_models = []
         valid_indexes_keys = []
         for model in list(self.models.values()):
@@ -67,7 +66,7 @@ class SearchEngine():
         return valid_indexes_keys
         
     def get_embedding(self, tensor, model_name, modality, preprocessing = False, binarized = False, threshold = 0):
-        '''
+        """
         Transforms tensor to an embedding using a model
 
         Parameters:
@@ -80,7 +79,7 @@ class SearchEngine():
 
         Returns:
         arraylike: Embedding of the tensor with the model
-        '''
+        """
         assert model_name in self.models, "Model not found"
         if self.cuda:
             tensor = tensor.cuda()
@@ -90,7 +89,7 @@ class SearchEngine():
         return embedding
             
     def search(self, embeddings, index_key, n=5):
-        '''
+        """
         Searches index for nearest n neighbors for embedding(s)
 
         Parameters
@@ -100,7 +99,7 @@ class SearchEngine():
 
         Returns:
         float(s), int(s): Distances and indicies of each result in dataset
-        '''
+        """
         assert index_key in self.indexes, "Index key not recognized"
         index = self.indexes[index_key]
         single_vector = False
@@ -116,7 +115,7 @@ class SearchEngine():
     
     def add_model(self, name, modalities, embedding_nets, 
                   input_dimensions, output_dimension, desc=None, force_add = False):
-        '''
+        """
         Add model to SearchEngine
 
         Parameters:
@@ -129,7 +128,7 @@ class SearchEngine():
 
         Returns:
         None
-        '''
+        """
         if not force_add:
             assert (name not in self.models), "Model with given name already in self.models"
 
@@ -144,7 +143,7 @@ class SearchEngine():
             print("Model '{}' added".format(name))
 
     def add_dataset(self, name, data, targets, modality, dimension, force_add = False):
-        '''
+        """
         Initializes dataset object
 
         Called by User
@@ -158,7 +157,7 @@ class SearchEngine():
 
         Returns:
         None
-        '''
+        """
         if not force_add:
             assert (name not in self.datasets), "Dataset with dataset_name already in self.datasets"
         assert (modality in self.modalities), "Modality not supported by SearchEngine"
@@ -171,7 +170,7 @@ class SearchEngine():
 
     def build_index(self, dataset_name, model_name, binarized=False, threshold = 0, load_embeddings = True, 
         save_embeddings = True, batch_size = 128, step_size = 1000):
-        '''
+        """
         Adds model embeddings of dataset to index
 
         Parameters:
@@ -186,7 +185,7 @@ class SearchEngine():
 
         Returns:
         tuple: Key of index
-        '''
+        """
 
         dataset = self.datasets[dataset_name]
         model = self.models[model_name]
@@ -233,13 +232,13 @@ class SearchEngine():
         
             
     def target_from_idx(self, indicies, dataset_name):
-        '''
+        """
         Takes either an int or a list of ints and returns corresponding targets of dataset
 
         Parameters:
         indices (int or list of ints): Indices of interest
         dataset_name (string or tuple): Name of dataset or index key to retrieve from
-        '''
+        """
         if type(dataset_name) == tuple and len(dataset_name) == 3:
             dataset_name = dataset_name[0]
         if type(indicies) == int:
@@ -248,8 +247,8 @@ class SearchEngine():
         return [dataset.targets[i] for i in indicies]
      
     def __repr__(self):
-        '''
+        """
         Representation of SearchEngine object, quick summary of assets
-        '''
+        """
         return "SearchEngine<{} modalities, {} models, {} datasets, {} indexes>".format(
             len(self.modalities), len(self.models), len(self.datasets), len(self.indexes))

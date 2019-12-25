@@ -37,6 +37,7 @@ class Model():
     def add_preprocessing(self, modality, preprocessor):
         """
         Adds a preprocessing method to a specific embedding_net
+        #TODO: change to use a preprocessing model
         
         Paramaters:
         modality (string): Modality of corresponding embedding_net
@@ -50,6 +51,7 @@ class Model():
                 pass
     
     def batch_embedding(self, batch, modality, preprocessing = False):
+        """Get embeedding of a batach"""
         modality = self.modalities[modality]
         if preprocessing:
             batch = modality['preprocessing'](*batch)
