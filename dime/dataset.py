@@ -1,26 +1,32 @@
-from sklearn.preprocessing import binarize
 import numpy as np
+from sklearn.preprocessing import binarize
+
 
 class Dataset():
     """
     Wrapper class around a dataset
     """
-    def __init__(self, name, data, targets, modality, dimension):
+    def __init__(self, engine, dataset_params):
         """
         Wrapper class around a dataset
 
-        Parameters:
-        name (string): Name of dataset
-        data (iterable): Data in tensor form i.e. transformed PIL.Images 
-        targets (iterable): Data in canonical form i.e. filenames for image datasets
-        modality (string): modality of dataset
-        dimension (int): dimension of each element of dataset
+        Parameters: {
+            name (string): Name of dataset
+            data (iterable): Data in tensor form i.e. transformed PIL.Images 
+            targets (iterable): Data in canonical form i.e. filenames for image datasets
+            modality (string): modality of dataset
+            dim (int): dimension of tensors of dataset
+            desc (str): description of dataset
+        }
         """
-        self.data = data
-        self.name = name
-        self.targets = targets
-        self.modality = modality
-        self.dimension = dimension
+        self.params = dataset_params
+
+        self.name = dataset_params["name"]
+        self.data = dataset_params["data"] 
+        self.targets = dataset_params["targets"]
+        self.modality = dataset_params["modality"]
+        self.dim = dataset_params["dim"]
+        self.desc = dataset_params["desc"]
 
     def create_loader(self, model, load_embeddings, save_directory, binarized, threshold, cuda):
         """
@@ -50,7 +56,7 @@ class Dataset():
     
     def save_batch(self, batch, filename, binarized, save_directory):
         """
-        #TODO move to index.py
+        #TODO move to engine.py
         Saves batch into a filename into .npy file
         Does bitpacking if batches are binarized to drastically reduce size of files
         
@@ -71,7 +77,7 @@ class Dataset():
                 
     def load_batch(self, filename, model, binarized):
         """
-        #TODO move to index.py
+        #TODO move to engine.py
         Load batch from a filename, does bit unpacking if embeddings are binarized
         
         Called by SearchEngine.load_embeddings()
@@ -94,7 +100,7 @@ class Dataset():
     
     def load_embeddings(self, directory, model, binarized):
         """
-        #TODO move to index.py
+        #TODO move to engine.py
         Loads previously saved embeddings from save_directory
         
         Parameters:
@@ -135,5 +141,6 @@ class Dataset():
                     batch = tuple(d.cuda() for d in batch)
                 embeddings = model.batch_embedding(batch, self.modality)
                 if binarized:
-                    embeddings = binarize(embeddings.detach(), threshold=threshold)
-                yield batch_idx, embeddings.cpu().detach().numpy()
+                    #TODO: Make sure this works
+                    embeddings = binarize(embeddings.numpy(), threshold=threshold)
+                yield batch_idx, embeddings

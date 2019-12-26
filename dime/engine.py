@@ -5,13 +5,18 @@ import os
 import faiss
 import time
 from torchvision import transforms
+from sklearn.preprocessing import binarize
+
+from dime.dataset import Dataset
+from dime.index import Index, load_index
+from dime.model import Model, load_model
 
 class SearchEngine():
     """
     Search Engine Class
     """
 
-    def __init__(self, modalities, save_directory = None, cuda = True, verbose = False):
+    def __init__(self, engine_params):
         """Initializes SearchEngine object
         
         Parameters:
@@ -19,14 +24,24 @@ class SearchEngine():
         save_directory (string): Directory to save embeddings
         cuda (bool): True if using CUDA
         verbose (bool): True if messages/information are to be printed out
+
+        dataset_dir:
+        embedding_dir:
+        model_dir:
+        index_dir:
         
         Returns:
         SearchEngine: SearchEngine object
         """
-        
-        self.cuda = cuda
-        self.save_directory = save_directory
-        self.verbose = verbose
+        self.name = engine_params["name"]
+        self.cuda = engine_params["cuda"]
+        self.verbose = engine_params["verbose"]
+
+        # directories TODO
+        self.dataset_dir = engine_params["dataset_dir"]
+        self.index_dir = engine_params["index_dir"]
+        self.model_dir = engine_params["model_dir"]
+        self.embedding_dir = engine_params["embedding_dir"]
         
         # Initialize index
         self.indexes = {}
@@ -34,16 +49,15 @@ class SearchEngine():
         self.datasets = {}
         self.modalities = {}
 
-        for modality in modalities:
-            self.modalities[modality] = {
-                'models': [],
-                'indexes': [],
-                'datasets': []
-            }
+        self.modalities = {m: {
+            "model_names":[], 
+            "index_names":[], 
+            "dataset_names":[]
+            } for m in engine_params["modalities"] }
             
-    def valid_indexes(self, tensor, modality):
+    def valid_index_names(self, tensor, modality):
         """
-        Returns a list of all indexes that are valid given a tensor and modality
+        Returns a list of names of all indexes that are valid given a tensor and modality
 
         Parameters:
         tensor (arraylike): Tensor to be processed
@@ -52,18 +66,13 @@ class SearchEngine():
         Returns:
         (list of tuples): Keys of valid indexes
         """
-        valid_models = []
-        valid_indexes_keys = []
-        for model in list(self.models.values()):
-            if modality in model.modalities:
-                submodel = model.modalities[modality]
-                if submodel['input_dimension'] == tuple(tensor.shape) or submodel['preprocessing']:
-                    valid_models.append(model.name)
-        for key in self.indexes:
-            dataset_name, model_name, binarized = key
-            if model_name in valid_models:
-                valid_indexes_keys.append(key)
-        return valid_indexes_keys
+        valid_model_names = [m.name for m in list(self.models.values()) if m.can_call(modality, tensor.shape)]
+        return [i.name for i in list(self.indexes.values()) if i.model_name in valid_model_names]
+
+    def buildable_indexes(self):
+        """Returns (model, dataset) pairs that are compatible"""
+        pass
+        #TODO: Write this function
         
     def get_embedding(self, tensor, model_name, modality, preprocessing = False, binarized = False, threshold = 0):
         """
@@ -81,14 +90,17 @@ class SearchEngine():
         arraylike: Embedding of the tensor with the model
         """
         assert model_name in self.models, "Model not found"
+        batch = tensor[None,:]
         if self.cuda:
-            tensor = tensor.cuda()
-        embedding = self.models[model_name].get_embedding(tensor, modality, preprocessing).detach().cpu()
+            #TODO: fix this if necessary?
+            pass
+        model = self.models[model_name]
+        embedding = model.get_embedding(batch, modality, preprocessing = preprocessing).numpy()[0]
         if binarized:
             embedding = binarize(embedding, threshold = threshold)
         return embedding
             
-    def search(self, embeddings, index_key, n=5):
+    def search(self, embeddings, index_name, n = 5):
         """
         Searches index for nearest n neighbors for embedding(s)
 
@@ -100,15 +112,22 @@ class SearchEngine():
         Returns:
         float(s), int(s): Distances and indicies of each result in dataset
         """
-        assert index_key in self.indexes, "Index key not recognized"
-        index = self.indexes[index_key]
-        single_vector = False
-        if len(embeddings.shape) == 1:
-            embeddings = embeddings[None,:]
-            single_vector = True
-        embeddings = embeddings.cpu().detach().numpy()
+        assert index_name in self.indexes, "index_name not recognized"
+        index = self.indexes[index_name]
+        if tuple(embeddings.shape) == index.dim:
+            batch = embeddings[None,:]
+            is_single_vector = True
+        elif len(embeddings.shape) == (index.dim + 1) and tuple(embeddings.shape)[-len(index.dim)] == index.dim:
+            batch = embeddings
+            is_single_vector = False
+        else:
+            raise RuntimeError(f"Provided embeddings of '{embeddings.shape}' " + \
+                "not compatible with index '{index.name}' of shape {index.dim} ")
+
+        embeddings = embeddings.numpy()
         distances, idxs = index.search(embeddings, n)
-        if single_vector:
+
+        if is_single_vector:
             return distances[0], idxs[0]
         else:
             return distances, idxs
@@ -252,3 +271,4 @@ class SearchEngine():
         """
         return "SearchEngine<{} modalities, {} models, {} datasets, {} indexes>".format(
             len(self.modalities), len(self.models), len(self.datasets), len(self.indexes))
+

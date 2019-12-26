@@ -32,7 +32,8 @@ class Index():
         self.binarized = index_params["binarized"]
         self.desc = index_params["desc"]
 
-        self.index = faiss.IndexFlatL2(self.engine.models[self.model_name].output_dimension)
+        self.dim = tuple(self.engine.models[self.model_name].output_dimension)
+        self.index = faiss.IndexFlatL2(self.dim)
     
     def add(self, embeddings):
         """Add embeddings to index"""
@@ -45,6 +46,7 @@ class Index():
     def save(self):
         """Saves index and index information to index_dir"""
         info = self.params
+        info["dim"] = self.dim
         with open(f"{self.engine.index_dir}/{self.name}.index", "w+") as f:
             f.write(info)
 

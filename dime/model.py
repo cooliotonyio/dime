@@ -1,4 +1,6 @@
 import numpy as np
+import warnings
+from sklearn.preprocessing import binarize
 
 def load_model(engine, model_name):
     """Loads a saved index"""
@@ -46,6 +48,22 @@ class Model():
                     embedding_net.cuda()
                 except:
                     continue
+
+    def can_call(self, modality, input_dim):
+        """Returns if model can be called on 'modality' with 'input_dim'"""
+        modality_index = self.modalities[modality]
+        if tuple(self.input_dim[modality_index]) == tuple(input_dim):
+            return True
+        elif self.preprocessors[modality_index]:
+            if type(self.preprocessors[modality_index]) == str:
+                preprocessor_name = self.preprocessors[modality_index]
+                return self.engine.models[preprocessor_name].can_build(modality, input_dim)
+            else:
+                warnings.warn("Unable to confirm compatibility with model '{}' with input_dim '{}' for " + \
+                    "modality '{}' with unknown preprocessor")
+                return True
+        return False
+                
         
     def add_preprocessing(self, modality, preprocessor):
         """
@@ -59,7 +77,7 @@ class Model():
         i = self.modalities[modality]
         self.preprocessors[i] = preprocessor
 
-    def batch_embedding(self, batch, modality, preprocessing = False):
+    def get_embedding(self, batch, modality, preprocessing = False):
         """Get embedding of a batch"""
         i = self.modalities[modality]
         if preprocessing:
@@ -69,22 +87,6 @@ class Model():
             else:
                 batch = preprocessor(*batch)
         return self.embedding_nets[i](*batch)
-
-    def get_embedding(self, tensor, modality, preprocessing = False):
-        """
-        Transforms singular tensor into an embedding based on modality
-        
-        Parameters:
-        tensor (arraylike): Tensor to be transformed
-        modality (string): Modality of tensor
-        preprocessing (bool): True if preprocessing method of modality should be used
-        
-        Returns:
-        arraylike: Embedding produced by model based on tensor and the modality
-        """
-        batch = np.array([tensor])
-        embedding_batch = self.batch_embedding(batch, modality, preprocessing=preprocessing)
-        return embedding_batch[0]
 
     def get_info(self):
         """
@@ -111,7 +113,7 @@ class Model():
             "modalities": self.params["modalities"],
             "input_dim": self.input_dim,
             "output_dim": self.output_dim,
-            "desc" self.desc
+            "desc": self.desc
         }
         #TODO: Save embedding nets
         with open(f"{self.engine.model_dir}/{self.name}/model.txt", "w+") as f:
