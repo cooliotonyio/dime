@@ -142,5 +142,5 @@ class Dataset():
                 embeddings = model.batch_embedding(batch, self.modality)
                 if binarized:
                     #TODO: Make sure this works
-                    embeddings = binarize(embeddings.numpy(), threshold=threshold)
+                    embeddings = binarize(embeddings, threshold=threshold)
                 yield batch_idx, embeddings

@@ -6,6 +6,7 @@ import faiss
 import time
 from torchvision import transforms
 from sklearn.preprocessing import binarize
+import warnings
 
 from dime.dataset import Dataset
 from dime.index import Index, load_index
@@ -95,7 +96,7 @@ class SearchEngine():
             #TODO: fix this if necessary?
             pass
         model = self.models[model_name]
-        embedding = model.get_embedding(batch, modality, preprocessing = preprocessing).numpy()[0]
+        embedding = model.get_embedding(batch, modality, preprocessing = preprocessing)[0]
         if binarized:
             embedding = binarize(embedding, threshold = threshold)
         return embedding
@@ -124,7 +125,7 @@ class SearchEngine():
             raise RuntimeError(f"Provided embeddings of '{embeddings.shape}' " + \
                 "not compatible with index '{index.name}' of shape {index.dim} ")
 
-        embeddings = embeddings.numpy()
+        embeddings = embeddings
         distances, idxs = index.search(embeddings, n)
 
         if is_single_vector:
@@ -132,8 +133,7 @@ class SearchEngine():
         else:
             return distances, idxs
     
-    def add_model(self, name, modalities, embedding_nets, 
-                  input_dimensions, output_dimension, desc=None, force_add = False):
+    def add_model(self, model_params, force_add = False):
         """
         Add model to SearchEngine
 
@@ -149,19 +149,21 @@ class SearchEngine():
         None
         """
         if not force_add:
-            assert (name not in self.models), "Model with given name already in self.models"
+            assert (model_params["name"] not in self.models), "Model with given name already in self.models"
+        assert [m for m in model_params["modalities"] if m not in self.modalities], f"Modalities not supported by {str(self)}"
 
-        if desc is None:
-            desc = name
-        model = Model(name, modalities, embedding_nets, input_dimensions, output_dimension, desc, cuda=self.cuda)
-        self.models[name] = model
-        for modality in modalities:
-            self.modalities[modality]['models'].append(name)
-        
+        if "desc" not in model_params:
+            warnings.warn("'desc' not provided in model_params, using 'name' as default")
+            model_params["desc"] = model_params["name"]
+
+        model = Model(self, model_params)
+        self.models[model.name] = model
+        for modality in model_params["modalities"]:
+            self.modalities[modality]['model_names'].append(model.name)
         if self.verbose:
-            print("Model '{}' added".format(name))
+            print("Model '{}' added".format(model.name))
 
-    def add_dataset(self, name, data, targets, modality, dimension, force_add = False):
+    def add_dataset(self, dataset_params, force_add = False):
         """
         Initializes dataset object
 
@@ -178,17 +180,18 @@ class SearchEngine():
         None
         """
         if not force_add:
-            assert (name not in self.datasets), "Dataset with dataset_name already in self.datasets"
-        assert (modality in self.modalities), "Modality not supported by SearchEngine"
-        dataset = Dataset(name, data, targets, modality, dimension)
-        self.datasets[name] = dataset
+            assert (dataset_params["name"] not in self.datasets), "Dataset with given name already in self.datasets"
+        assert (dataset_params["modality"] in self.modalities), f"Modality not supported by {str(self)}"
+
+        dataset = Dataset(self, dataset_params)
+        
+        self.datasets[dataset.name] = dataset
         self.modalities[dataset.modality]['datasets'].append(dataset.name)
         
         if self.verbose:
-            print("Dataset '{}' added".format(name))
+            print("Dataset '{}' added".format(dataset.name))
 
-    def build_index(self, dataset_name, model_name, binarized=False, threshold = 0, load_embeddings = True, 
-        save_embeddings = True, batch_size = 128, step_size = 1000):
+    def build_index(self, index_params, load_embeddings = True, save_embeddings = True, batch_size = 128, step_size = 1000):
         """
         Adds model embeddings of dataset to index
 
@@ -205,23 +208,25 @@ class SearchEngine():
         Returns:
         tuple: Key of index
         """
-
-        dataset = self.datasets[dataset_name]
-        model = self.models[model_name]
-
-        assert not save_embeddings or self.save_directory, "save_directory not specified"
+        dataset = self.datasets[index_params["dataset_name"]]
+        model = self.models[index_params["model_name"]]
         assert dataset.modality in model.modalities, "Model does not support dataset modality"
-        save_directory = "{}/{}/{}/{}/".format(self.save_directory, dataset.name, model.name,
-                                                      "binarized" if binarized else "unbinarized")
-        if not os.path.exists(save_directory):
-            os.makedirs(save_directory)
+
+        post_processing = ""
+        if index_params["binarized"]
+            warning.warn("Index being built is binarized")
+            post_processing = "binarized"
+
+        embedding_dir = f"{self.embedding_dir}/{model.name}/{dataset.name}/{embeddings}/"
+        if not os.path.exists(embedding_dir) and save_embeddings:
+            os.makedirs(embedding_dir)
         
         if self.verbose:
             start_time = time.time()
             print("Building {}, {} index".format(model.name, dataset.name))
             
-        #TODO: Cuda() index
-        index = faiss.IndexFlatL2(model.output_dimension)
+        #TODO: Cuda() index bkeh
+        index = Index(self, index_params)
         loader = dataset.create_loader(model, load_embeddings, self.save_directory, binarized, threshold, self.cuda)
 
         #TODO: fix num_batches
@@ -266,9 +271,13 @@ class SearchEngine():
         return [dataset.targets[i] for i in indicies]
      
     def __repr__(self):
-        """
-        Representation of SearchEngine object, quick summary of assets
-        """
-        return "SearchEngine<{} modalities, {} models, {} datasets, {} indexes>".format(
-            len(self.modalities), len(self.models), len(self.datasets), len(self.indexes))
+        """Representation of SearchEngine object, quick summary of assets"""
+        return f"SearchEngine< \
+            {len(self.modalities)} modalities, \
+            {len(self.models)} models, \
+            {len(self.datasets)} datasets, \
+            {len(self.indexes)} indexes>"
+    
+    def __str__(self):
+        return self.__repr__()
 

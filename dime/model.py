@@ -35,7 +35,7 @@ class Model():
         self.modalities = {modality: i for i, modality in enumerate(model_params["modalities"])}
         self.embedding_nets = model_params["embedding_nets"]
         self.input_dim = model_params["input_dim"]
-        self.cuda = model_params["cuda"]
+        self.cuda = engine.cuda
         self.desc = model_params["desc"]
 
         self.preprocessors = [None for _ in range(len(self.modalities))]

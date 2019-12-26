@@ -18,8 +18,8 @@ class Index():
             "name":             name of the index
             "model_name":       name of the model of index
             "dataset_name":     name of the dataset of index
-            "embeddings_dir":   directory of embeddings
             "binarized":        boolean of whether the index embedding are binarized or not
+            "threshold":        threshold for binarization
         }
         """
         self.params = index_params
@@ -28,9 +28,11 @@ class Index():
         self.name = index_params["name"]
         self.model_name = index_params["model_name"]
         self.dataset_name = index_params["dataset_name"]
-        self.embeddings_dir = index_params["embeddings_dir"]
         self.binarized = index_params["binarized"]
         self.desc = index_params["desc"]
+        
+        if self.binarized:
+            self.threshold = index_params["threshold"]
 
         self.dim = tuple(self.engine.models[self.model_name].output_dimension)
         self.index = faiss.IndexFlatL2(self.dim)
