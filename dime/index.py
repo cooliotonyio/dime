@@ -35,6 +35,7 @@ class Index():
             self.threshold = index_params["threshold"]
 
         self.dim = tuple(self.engine.models[self.model_name].output_dimension)
+        #TODO: cuda this?
         self.index = faiss.IndexFlatL2(self.dim)
     
     def add(self, embeddings):

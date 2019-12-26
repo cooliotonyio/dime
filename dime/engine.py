@@ -84,7 +84,7 @@ class SearchEngine():
         model_name (string): Name of model to process with
         modality (string): Modality of tensor, should supported by model
         preprocessing (bool): True if tensor should be preprocessed before using model
-        binarized (bool): True if embedding should be binarized in postprocessing
+        binarized (bool): True if embedding should be binarized in post-processing
         threshold (float): Threshold for binarization, only used in binarization
 
         Returns:
@@ -116,16 +116,14 @@ class SearchEngine():
         assert index_name in self.indexes, "index_name not recognized"
         index = self.indexes[index_name]
         if tuple(embeddings.shape) == index.dim:
-            batch = embeddings[None,:]
+            embeddings = embeddings[None,:]
             is_single_vector = True
         elif len(embeddings.shape) == (index.dim + 1) and tuple(embeddings.shape)[-len(index.dim)] == index.dim:
-            batch = embeddings
             is_single_vector = False
         else:
             raise RuntimeError(f"Provided embeddings of '{embeddings.shape}' " + \
                 "not compatible with index '{index.name}' of shape {index.dim} ")
 
-        embeddings = embeddings
         distances, idxs = index.search(embeddings, n)
 
         if is_single_vector:
@@ -191,7 +189,7 @@ class SearchEngine():
         if self.verbose:
             print("Dataset '{}' added".format(dataset.name))
 
-    def build_index(self, index_params, load_embeddings = True, save_embeddings = True, batch_size = 128, step_size = 1000):
+    def build_index(self, index_params, load_embeddings = True, save_embeddings = True, batch_size = 128, step_size = 1000, force_add = False):
         """
         Adds model embeddings of dataset to index
 
@@ -211,64 +209,133 @@ class SearchEngine():
         dataset = self.datasets[index_params["dataset_name"]]
         model = self.models[index_params["model_name"]]
         assert dataset.modality in model.modalities, "Model does not support dataset modality"
+        assert force_add or index_params["name"] not in model.indexes, "Index with given name already exists"
 
         post_processing = ""
-        if index_params["binarized"]
-            warning.warn("Index being built is binarized")
+        if "binarized" in index_params and index_params["binarized"]:
+            warnings.warn("Index being built is binarized")
             post_processing = "binarized"
 
-        embedding_dir = f"{self.embedding_dir}/{model.name}/{dataset.name}/{embeddings}/"
+        index = Index(self, index_params)
+
+        embedding_dir = f"{self.embedding_dir}/{model.name}/{dataset.name}/{post_processing}/"
         if not os.path.exists(embedding_dir) and save_embeddings:
             os.makedirs(embedding_dir)
         
         if self.verbose:
             start_time = time.time()
             print("Building {}, {} index".format(model.name, dataset.name))
-            
-        #TODO: Cuda() index bkeh
-        index = Index(self, index_params)
-        loader = dataset.create_loader(model, load_embeddings, self.save_directory, binarized, threshold, self.cuda)
 
-        #TODO: fix num_batches
-        num_batches = 10000
+        num_batches = np.ceil(len(dataset) / batch_size)
         batch_magnitude = len(str(num_batches))
 
-        for batch_idx, embeddings in loader:
+        if load_embeddings:
+            for batch_idx, embeddings in self.load_embeddings(embedding_dir, model, post_processing):
+                start_index = batch_idx
+                index.add(embeddings)
+            start_index += 1
+        else:
+            start_index = 0
+
+        for batch_idx, batch in dataset.get_data(batch_size, start_index = start_index):
             if self.verbose and not (batch_idx % step_size):
-                print("Batch {} of {}".format(batch_idx, num_batches))
-            if save_embeddings:
-                filename = "batch_{}".format(str(batch_idx).zfill(batch_magnitude))
-                dataset.save_batch(embeddings, filename, binarized, save_directory)
+                print("Processing batch {} of {}".format(batch_idx, num_batches))
+
+            embeddings = model.get_embedding(batch)
+            if post_processing == "binarized":
+                embeddings = binarize(embeddings)
+
             index.add(embeddings)
 
+            if save_embeddings:
+                filename = "batch_{}".format(str(batch_idx).zfill(batch_magnitude))
+                self.save_batch(embeddings, filename, embedding_dir, post_processing = post_processing)
 
-        key = (dataset.name, model.name, binarized)
-        
-        self.indexes[key] = index
-        self.modalities[dataset.modality]['indexes'].append(key)
-        self.modalities[dataset.modality]['indexes'] = list(set(self.modalities[dataset.modality]['indexes']))
-        
         if self.verbose:
             time_elapsed = time.time() - start_time
-            print("Finished building {} index in {} seconds.".format(str(key), round(time_elapsed, 4)))
+            print("Finished building index {} in {} seconds.".format(index.name, round(time_elapsed, 4)))
+        
+        self.indexes[index.name] = index
+        self.modalities[dataset.modality]['index_names'].append(index.name)
 
-        return key
+        return index.name
         
             
     def target_from_idx(self, indicies, dataset_name):
-        """
-        Takes either an int or a list of ints and returns corresponding targets of dataset
+        """Takes either an int or a list of ints and returns corresponding targets of dataset
 
         Parameters:
         indices (int or list of ints): Indices of interest
         dataset_name (string or tuple): Name of dataset or index key to retrieve from
         """
-        if type(dataset_name) == tuple and len(dataset_name) == 3:
-            dataset_name = dataset_name[0]
-        if type(indicies) == int:
-            indicies = [indicies]
         dataset = self.datasets[dataset_name]
-        return [dataset.targets[i] for i in indicies]
+        return dataset.idx_to_target(indicies)
+
+    def load_embeddings(self, embedding_dir, model, post_processing):
+        """
+        Loads previously saved embeddings from save_directory
+        
+        Parameters:
+        directory (string): Directory of embeddings
+        model (EmbeddingModel): Model object that outputted the saved embeddings
+        binarized (bool): True if the saved embedding is binarized. False otherwise.
+        
+        Yields:
+        int: Batch index
+        arraylike: Embeddings received from passing data through net
+        """
+        filenames = sorted([f for f in os.listdir(embedding_dir) if f[-3:] == "npy"])
+        for batch_idx in range(len(filenames)):
+            embeddings = self.load_batch(filenames[batch_idx], embedding_dir, model.output_dim, post_processing=post_processing)
+            yield batch_idx, embeddings
+
+    def load_batch(self, filename, embedding_dir, dim, post_processing=""):
+        """
+        Load batch from a filename, does bit unpacking if embeddings are binarized
+        
+        Called by SearchEngine.load_embeddings()
+        
+        Parameters:
+        filename (string): Path to batch, which should be a .npy file
+        model (EmbeddingModel): Model that created the batches, need to correctly format binarized arrays
+        binarized (bool): True if arrays are binarized
+        
+        Returns:
+        arraylike: loaded batch
+        """
+        if post_processing == "binarized":
+            #TODO: confirm this works
+            batch = np.array(np.unpackbits(np.load(filename)), dtype="float32")
+            rows = len(batch) // dim
+            batch = batch.reshape(rows, dim)
+        else:
+            batch = np.load(filename).astype("float32")
+
+        if tuple(batch.shape[-len(dim)]) != tuple(dim):
+            warnings.warn(f"Loaded batch has dimension {batch.shape[-len(dim)]} but was expected to be {dim}")
+
+        return batch
+
+    def save_batch(self, embeddings, filename, embedding_dir, post_processing = ""):
+        """
+        Saves batch into a filename into .npy file
+        Does bitpacking if batches are binarized to drastically reduce size of files
+        
+        Parameters:
+        batch (arraylike): Batch to save
+        filename (string): Path to save batch to
+        binarized (bool): True if batch is binarized
+        save_directory (string): Directory to save .npy files
+        
+        Returns:
+        None
+        """
+        path = "{}/{}.npy".format(embedding_dir, filename)
+        if post_processing == "binarized":
+            #TODO: Confirm this works
+            np.save(path, np.packbits(embeddings.astype(bool)))
+        else:
+            np.save(path, embeddings.astype('float32'))
      
     def __repr__(self):
         """Representation of SearchEngine object, quick summary of assets"""

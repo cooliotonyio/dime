@@ -20,6 +20,7 @@ class Dataset():
         }
         """
         self.params = dataset_params
+        self.engine = engine
 
         self.name = dataset_params["name"]
         self.data = dataset_params["data"] 
@@ -28,99 +29,19 @@ class Dataset():
         self.dim = dataset_params["dim"]
         self.desc = dataset_params["desc"]
 
-    def create_loader(self, model, load_embeddings, save_directory, binarized, threshold, cuda):
-        """
-        Creates iterable for processing
+    def idx_to_target(self, indicies):
+        """Takes either an int or a list of ints and returns corresponding targets of dataset
 
         Parameters:
-        model (Model): Model object used for processing (necessary for loading embeddings)
-        load_embeddings (bool): True if loading previous embeddings instead of extracting embeddings
-        save_directory (string): Path to directory where embeddings should be saved/loaded
-        binarized (bool): True if embeddings should be binarized
-        threshold (float): Threshold for binarization
-        cuda (bool): True if using CUDA
-
-        Returns:
-        iterable: Iterable that yields batches
+        indices (int or list of ints): Indices of interest
         """
-        
-        #TODO: enable loading saved_embeddings midway by giving a batch index
-        
-        if load_embeddings:
-            directory = "{}/{}/{}/{}".format(
-                save_directory, self.name, model.name, "binarized" if binarized else "unbinarized")
-            loader = self.load_embeddings(directory, model, binarized)
-        else:
-            loader = self.process_data(model, binarized, threshold, 0, cuda)
-        return loader
+        if type(indicies) == int:
+            return self.targets[indicies]
+        return [self.targets[i] for i in indicies]
     
-    def save_batch(self, batch, filename, binarized, save_directory):
+    def get_data(self, batch_size = 1, start_index = 0):
         """
-        #TODO move to engine.py
-        Saves batch into a filename into .npy file
-        Does bitpacking if batches are binarized to drastically reduce size of files
-        
-        Parameters:
-        batch (arraylike): Batch to save
-        filename (string): Path to save batch to
-        binarized (bool): True if batch is binarized
-        save_directory (string): Directory to save .npy files
-        
-        Returns:
-        None
-        """
-        path = "{}/{}.npy".format(save_directory, filename)
-        if binarized:
-            np.save(path, np.packbits(batch.astype(bool)))
-        else:
-            np.save(path, batch.astype('float32'))
-                
-    def load_batch(self, filename, model, binarized):
-        """
-        #TODO move to engine.py
-        Load batch from a filename, does bit unpacking if embeddings are binarized
-        
-        Called by SearchEngine.load_embeddings()
-        
-        Parameters:
-        filename (string): Path to batch, which should be a .npy file
-        model (EmbeddingModel): Model that created the batches, need to correctly format binarized arrays
-        binarized (bool): True if arrays are binarized
-        
-        Returns:
-        arraylike: loaded batch
-        """
-        if binarized:
-            batch = np.unpackbits(np.load(filename)).astype('float32')
-            dims, rows = model.output_dimension, len(batch) // model.output_dimension
-            batch = batch.reshape(rows, dims)
-        else:
-            batch = np.load(filename).astype('float32')
-        return batch
-    
-    def load_embeddings(self, directory, model, binarized):
-        """
-        #TODO move to engine.py
-        Loads previously saved embeddings from save_directory
-        
-        Parameters:
-        directory (string): Directory of embeddings
-        model (EmbeddingModel): Model object that outputted the saved embeddings
-        binarized (bool): True if the saved embedding is binarized. False otherwise.
-        
-        Yields:
-        int: Batch index
-        arraylike: Embeddings received from passing data through net
-        """
-        filenames = sorted(["{}/{}".format(directory, filename) for filename in os.listdir(directory) if filename[-3:] == "npy"])
-        for batch_idx in range(len(filenames)):
-            embeddings = self.load_batch(filenames[batch_idx], model, binarized)
-            yield batch_idx, embeddings
-    
-    def process_data(self, model, binarized, threshold, offset, cuda):
-        """
-        TODO: Split and move to engine.py
-        Generator function that takes in a model and returns the embeddings of dataset
+        Generator function that returns data
         
         Parameters:
         model (Model): Model used to extract features
@@ -133,14 +54,19 @@ class Dataset():
         int: Batch index
         arraylike: Embeddings received from passing data through net
         """
+        #TODO: implement with batch_size
         for batch_idx, batch in enumerate(self.data):
-            if batch_idx >= offset:
+            if batch_idx >= start_index:
                 if not type(batch) in (tuple, list):
                     batch = (batch,)
-                if cuda:
+                if self.engine.cuda:
                     batch = tuple(d.cuda() for d in batch)
-                embeddings = model.batch_embedding(batch, self.modality)
-                if binarized:
-                    #TODO: Make sure this works
-                    embeddings = binarize(embeddings, threshold=threshold)
-                yield batch_idx, embeddings
+                yield batch_idx, batch
+
+    def __len__(self):
+        return len(self.data)
+
+class ImageDataset(Dataset):
+    def __init__(self, engine, dataset_params):
+        super(ImageDataset, self).__init__(engine, dataset_params)
+        self.modality = "image"
