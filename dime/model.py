@@ -1,7 +1,16 @@
+import numpy as np
+
+def load_model(engine, model_name):
+    """Loads a saved index"""
+    with open(f"{engine.model_dir}/{model_name}/model.txt", "r") as f:
+        model_params = json.loads(f.read())
+    #TODO: load embedding nets
+    model_params["embedding_nets"] = "WEWEWEWEWEWEWEWE"
+    return Model(engine, model_params)
+
 class Model():
     
-    def __init__(
-        self, name, modalities, embedding_nets, input_dimensions, output_dimension, desc, cuda = False):
+    def __init__(self, engine, model_params):
         """
         Initializes Model obkect
         
@@ -16,19 +25,23 @@ class Model():
         Returns:
         Model: Model object
         """
-        assert len(modalities) == len(embedding_nets) == len(input_dimensions)
-        self.modalities = {}           
-        for i in range(len(modalities)):
-            self.modalities[modalities[i]] = {
-                'embedding_net': embedding_nets[i],
-                'input_dimension': tuple(input_dimensions[i]),
-                'preprocessing': None}
-        self.name = name
-        self.output_dimension = output_dimension
-        self.cuda = cuda
-        self.desc = desc
-        if cuda:
-            for embedding_net in embedding_nets:
+        self.engine = engine
+        self.params = model_params
+
+        self.name = model_params["name"]
+        self.output_dim = model_params["output_dim"]
+        self.modalities = {modality: i for i, modality in enumerate(model_params["modalities"])}
+        self.embedding_nets = model_params["embedding_nets"]
+        self.input_dim = model_params["input_dim"]
+        self.cuda = model_params["cuda"]
+        self.desc = model_params["desc"]
+
+        self.preprocessors = [None for _ in range(len(self.modalities))]
+
+        assert len(self.modalities) == len(self.embedding_nets) == len(self.input_dim)
+        
+        if self.cuda:
+            for embedding_net in self.embedding_nets:
                 try:
                     embedding_net.cuda()
                 except:
@@ -40,26 +53,26 @@ class Model():
         #TODO: change to use a preprocessing model
         
         Paramaters:
-        modality (string): Modality of corresponding embedding_net
-        preprocessor (callable): Preprocessor that is called
+        modality (str): Modality of corresponding embedding_net
+        preprocessor_name (str or callable): Either name of a preprocessing model or a callable
         """
-        self.modalities[modality]['preprocessing'] = preprocessor
-        if self.cuda:
-            try:
-                self.modalities[modality]['preprocessing'] = preprocessor.cuda()
-            except:
-                pass
-    
+        i = self.modalities[modality]
+        self.preprocessors[i] = preprocessor
+
     def batch_embedding(self, batch, modality, preprocessing = False):
-        """Get embeedding of a batach"""
-        modality = self.modalities[modality]
+        """Get embedding of a batch"""
+        i = self.modalities[modality]
         if preprocessing:
-            batch = modality['preprocessing'](*batch)
-        return modality['embedding_net'](*batch)
-    
+            preprocessor = self.preprocessors[i]
+            if type(preprocessor) == str:
+                batch = self.engine.models[preprocessor].batch_embedding(batch, modality, preprocessing = False)
+            else:
+                batch = preprocessor(*batch)
+        return self.embedding_nets[i](*batch)
+
     def get_embedding(self, tensor, modality, preprocessing = False):
         """
-        Transforms tensor into an embedding based on modality
+        Transforms singular tensor into an embedding based on modality
         
         Parameters:
         tensor (arraylike): Tensor to be transformed
@@ -69,13 +82,10 @@ class Model():
         Returns:
         arraylike: Embedding produced by model based on tensor and the modality
         """
-        if self.cuda:
-            tensor = tensor.cuda()
-        modality = self.modalities[modality]
-        if preprocessing and modality['preprocessing']:
-            tensor = modality['preprocessing'](tensor)
-        return modality['embedding_net'](tensor)
-    
+        batch = np.array([tensor])
+        embedding_batch = self.batch_embedding(batch, modality, preprocessing=preprocessing)
+        return embedding_batch[0]
+
     def get_info(self):
         """
         Returns a dictionary summarizing basic information about the model
@@ -89,29 +99,20 @@ class Model():
         info = {
             "name": self.name,
             "modalities": list(self.modalities.keys()),
-            "output_dimension": self.output_dimension,
+            "output_dim": self.output_dim,
             "desc": self.desc
         }
         return info
     
-    def to_cpu(self):
-        """Change model setting to use cpu"""
-        self.cuda = False
-        for modality in self.modalities:
-            try:
-                modality['embedding_net'] = modality['embedding_net'].cpu()
-                if modality['preprocessing']:
-                    modality['preprocessing'] = modality['preprocessing'].cpu()
-            except:
-                continue
-     
-    def to_cuda(self):
-        """Change model to use cuda (GPU)"""
-        self.cuda = True
-        for modality in self.modalities:
-            try:
-                modality['embedding_net'] = modality['embedding_net'].cuda()
-                if modality['preprocessing']:
-                    modality['preprocessing'] = modality['preprocessing'].cuda()
-            except:
-                continue
+    def save(self):
+        """Save the model"""
+        info = {
+            "name": self.name,
+            "modalities": self.params["modalities"],
+            "input_dim": self.input_dim,
+            "output_dim": self.output_dim,
+            "desc" self.desc
+        }
+        #TODO: Save embedding nets
+        with open(f"{self.engine.model_dir}/{self.name}/model.txt", "w+") as f:
+            f.write(info)

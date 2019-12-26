@@ -6,9 +6,9 @@ def load_index(engine, index_name):
     """Loads a saved index"""
     with open(f"{engine.index_dir}/{index_name}.index", "r") as f:
         index_params = json.loads(f.read())
-        index = Index(engine, index_params)
-        #TODO: add embeddings to index
-        return index
+    index = Index(engine, index_params)
+    #TODO: add embeddings to index
+    return index
 
 class Index():
     def __init__(self, engine, index_params):
@@ -42,11 +42,10 @@ class Index():
         """Returns (distances, indices) of n closest neighbors to each embedding"""
         return self.index.search(embeddings, n)
 
-    def save(self, index_dir):
+    def save(self):
         """Saves index and index information to index_dir"""
-        assert os.path.isdir(index_dir)
         info = self.params
-        with open(f"{index_dir}/{self.name}.index", "w+") as f:
+        with open(f"{self.engine.index_dir}/{self.name}.index", "w+") as f:
             f.write(info)
 
     def __len__(self):
