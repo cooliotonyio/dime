@@ -1,13 +1,19 @@
 import numpy as np
 import warnings
+import os
+import pickle
+import json
 from sklearn.preprocessing import binarize
 
 def load_model(engine, model_name):
     """Loads a saved index"""
-    with open(f"{engine.model_dir}/{model_name}/model.txt", "r") as f:
+    model_dir = f"{engine.model_dir}/{model_name}"
+    with open(f"{model_dir}/model.txt", "r") as f:
         model_params = json.loads(f.read())
-    #TODO: load embedding nets
-    model_params["embedding_nets"] = "WEWEWEWEWEWEWEWE"
+    model_params["embedding_nets"] = []
+    for f in os.listdir(f"{model_dir}/embedding_nets/"):
+        with open(f, "rb"):
+            model_params["embedding_nets"].append(pickle.load(f))
     return Model(engine, model_params)
 
 class Model():
@@ -108,13 +114,16 @@ class Model():
     
     def save(self):
         """Save the model"""
-        info = {
+        info = json.dumps({
             "name": self.name,
             "modalities": self.params["modalities"],
             "input_dim": self.input_dim,
             "output_dim": self.output_dim,
             "desc": self.desc
-        }
-        #TODO: Save embedding nets
-        with open(f"{self.engine.model_dir}/{self.name}/model.txt", "w+") as f:
+        })
+        model_dir = f"{self.engine.model_dir}/{self.name}"
+        with open(f"{model_dir}/model.txt", "w+") as f:
             f.write(info)
+        for modality_index, embedding_net in enumerate(self.embedding_nets):
+            with open(f"{model_dir}/embedding_nets/{self.modalities[modality_index]}.pkl", "wb+") as f:
+                pickle.dump(embedding_net, f)

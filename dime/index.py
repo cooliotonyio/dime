@@ -50,6 +50,7 @@ class Index():
         """Saves index and index information to index_dir"""
         info = self.params
         info["dim"] = self.dim
+        info = json.dumps(info)
         with open(f"{self.engine.index_dir}/{self.name}.index", "w+") as f:
             f.write(info)
 
