@@ -1,16 +1,12 @@
-import torch
 import numpy as np
-import PIL
 import os
-import faiss
 import time
-from torchvision import transforms
 from sklearn.preprocessing import binarize
 import warnings
 
 from dime.dataset import Dataset
-from dime.index import Index, load_index
-from dime.model import Model, load_model
+from dime.index import Index
+from dime.model import Model
 
 class SearchEngine():
     """
@@ -18,33 +14,30 @@ class SearchEngine():
     """
 
     def __init__(self, engine_params):
-        """Initializes SearchEngine object
+        """
+        Initializes SearchEngine object
         
-        Parameters:
-        modalities (list of strings): Modalities supported by this SearchEngine object
-        save_directory (string): Directory to save embeddings
-        cuda (bool): True if using CUDA
-        verbose (bool): True if messages/information are to be printed out
-
-        dataset_dir:
-        embedding_dir:
-        model_dir:
-        index_dir:
-        
-        Returns:
-        SearchEngine: SearchEngine object
+        Parameters: 
+        engine_params (dict): {
+            "name":             (str) what to name the instance
+            "cuda":             (bool) True if using CUDA
+            "verbose":          (bool) True if messages/information are to be printed out
+            "dataset_dir":      (str) Directory of Datasets
+            "index_dir":        (str) Directory of Indexes
+            "model_dir":        (str) Directory of Models
+            "embedding_dir":    (str) Directory of embeddings
+            "modalities":       (list of str) The modalities support by this instance
+        }
         """
         self.name = engine_params["name"]
         self.cuda = engine_params["cuda"]
         self.verbose = engine_params["verbose"]
 
-        # directories TODO
         self.dataset_dir = engine_params["dataset_dir"]
         self.index_dir = engine_params["index_dir"]
         self.model_dir = engine_params["model_dir"]
         self.embedding_dir = engine_params["embedding_dir"]
         
-        # Initialize index
         self.indexes = {}
         self.models = {}
         self.datasets = {}
@@ -62,10 +55,10 @@ class SearchEngine():
 
         Parameters:
         tensor (arraylike): Tensor to be processed
-        modality (string): Modality of tensor
+        modality (str): Modality of tensor
 
         Returns:
-        (list of tuples): Keys of valid indexes
+        list of tuples: Keys of valid indexes
         """
         valid_model_names = [m.name for m in list(self.models.values()) if m.can_call(modality, tensor.shape)]
         return [i.name for i in list(self.indexes.values()) if i.model_name in valid_model_names]
@@ -81,8 +74,8 @@ class SearchEngine():
 
         Parameters:
         tensor (arraylike): Tensor to be processed
-        model_name (string): Name of model to process with
-        modality (string): Modality of tensor, should supported by model
+        model_name (str): Name of model to process with
+        modality (str): Modality of tensor, should supported by model
         preprocessing (bool): True if tensor should be preprocessed before using model
         binarized (bool): True if embedding should be binarized in post-processing
         threshold (float): Threshold for binarization, only used in binarization
@@ -107,8 +100,8 @@ class SearchEngine():
 
         Parameters
         embeddings (arraylike or list of arraylikes): Input embeddings to search with
-        index_key (tuple): Key of index to search in
-        n (int): Number of results
+        index_name (str): Name of index to search in
+        n (int): Number of results to be returned per embedding
 
         Returns:
         float(s), int(s): Distances and indicies of each result in dataset
@@ -133,15 +126,11 @@ class SearchEngine():
     
     def add_model(self, model_params, force_add = False):
         """
-        Add model to SearchEngine
+        Adds model to SearchEngine
 
         Parameters:
-        name (string): Name of model, used as dictionary key in self.models
-        modalities (list of strings): Ordered list of modalities supported by model
-        embedding_nets (list of callables): Ordered list of either functions or callable networks
-        input_dimensions (list of ints): Ordered list of input dimensions for each embedding_net
-        output dimension (int): Output dimension of the model
-        desc (string): Description of model
+        model_params (dict): See Model.__init__
+        force_add (bool): True if forcefully overwriting any Model with the same name
 
         Returns:
         None
@@ -168,11 +157,8 @@ class SearchEngine():
         Called by User
 
         Parameters:
-        name (string): Name of dataset
-        data (iterable): Data in tensor form i.e. transformed PIL.Images 
-        targets (iterable): Data in canonical form i.e. filenames for image datasets
-        modality (string): modality of dataset
-        dimension (int): dimension of each element of dataset
+        dataset_params (dict): See Dataset.__init__
+        force_add (bool): True if forcefully overwriting any Dataset with the same name
 
         Returns:
         None
@@ -189,19 +175,17 @@ class SearchEngine():
         if self.verbose:
             print("Dataset '{}' added".format(dataset.name))
 
-    def build_index(self, index_params, load_embeddings = True, save_embeddings = True, batch_size = 128, step_size = 1000, force_add = False):
+    def build_index(self, index_params, load_embeddings = True, save_embeddings = True, batch_size = 128, message_freq = 1000, force_add = False):
         """
         Adds model embeddings of dataset to index
 
         Parameters:
-        dataset_name (string): Name of dataset
-        model_name (model): Name of model
-        binarized (bool): True if embeddings should be binarized
-        threshold (float): Threshold for binarization, only used in binarization
-        load_embeddings (bool): True if loading embeddings, False will process entire dataset with model
-        save_embeddings (bool): True if embeddings should be saved to self.save_directory
-        batch_size (int): How many elements of dataset are processed at a time
-        step_size (int): How many batches before printing messages, only used when self.verbose is True
+        index_params (dict): See Index.__init__
+        load_embeddings (bool): True if function should use previously extracted embeddings if they exist
+        save_embeddings (bool): True if extracted embeddings should be saved during the function
+        batch_size (int): The size of a batch of data being processed
+        message_freq (int): How many batches before printing any messages if self.verbose
+        force_add (bool): True if forcefully overwriting any Index with the same name
 
         Returns:
         tuple: Key of index
@@ -238,7 +222,7 @@ class SearchEngine():
             start_index = 0
 
         for batch_idx, batch in dataset.get_data(batch_size, start_index = start_index):
-            if self.verbose and not (batch_idx % step_size):
+            if self.verbose and not (batch_idx % message_freq):
                 print("Processing batch {} of {}".format(batch_idx, num_batches))
 
             embeddings = model.get_embedding(batch)
@@ -267,6 +251,9 @@ class SearchEngine():
         Parameters:
         indices (int or list of ints): Indices of interest
         dataset_name (string or tuple): Name of dataset or index key to retrieve from
+
+        Returns:
+        list: Targets corresponding to provided indicies in specified dataset
         """
         dataset = self.datasets[dataset_name]
         return dataset.idx_to_target(indicies)
@@ -276,13 +263,13 @@ class SearchEngine():
         Loads previously saved embeddings from save_directory
         
         Parameters:
-        directory (string): Directory of embeddings
-        model (EmbeddingModel): Model object that outputted the saved embeddings
-        binarized (bool): True if the saved embedding is binarized. False otherwise.
+        embedding_dir (string): Directory of embeddings
+        model (Model): Model object with the output dimensions embedddings should be reshaped to
+        post_processing (str): "binarized" if embeddings are binarized
         
         Yields:
         int: Batch index
-        arraylike: Embeddings received from passing data through net
+        arraylike: Embeddings received from passing data through model
         """
         filenames = sorted([f for f in os.listdir(embedding_dir) if f[-3:] == "npy"])
         for batch_idx in range(len(filenames)):
@@ -296,16 +283,17 @@ class SearchEngine():
         Called by SearchEngine.load_embeddings()
         
         Parameters:
-        filename (string): Path to batch, which should be a .npy file
-        model (EmbeddingModel): Model that created the batches, need to correctly format binarized arrays
-        binarized (bool): True if arrays are binarized
+        filename (string): Name of batch .npy file
+        embedding_dir (str): Path of the directory containing the embeddings
+        dim (tuple): The shape of each embedding should be
+        post_processing (str): "binarized" if embeddings are binarized
         
         Returns:
         arraylike: loaded batch
         """
         if post_processing == "binarized":
             #TODO: confirm this works
-            batch = np.array(np.unpackbits(np.load(filename)), dtype="float32")
+            batch = np.array(np.unpackbits(np.load(f"{embedding_dir}/{filename}")), dtype="float32")
             rows = len(batch) // dim
             batch = batch.reshape(rows, dim)
         else:
@@ -319,13 +307,14 @@ class SearchEngine():
     def save_batch(self, embeddings, filename, embedding_dir, post_processing = ""):
         """
         Saves batch into a filename into .npy file
+
         Does bitpacking if batches are binarized to drastically reduce size of files
         
         Parameters:
-        batch (arraylike): Batch to save
-        filename (string): Path to save batch to
-        binarized (bool): True if batch is binarized
-        save_directory (string): Directory to save .npy files
+        embeddings (arraylike): The batch of embeddings to be saved
+        filename (string): Name of batch .npy file
+        embedding_dir (str): Path of the directory containing the embeddings
+        post_processing (str): "binarized" if embeddings are binarized
         
         Returns:
         None
@@ -346,5 +335,6 @@ class SearchEngine():
             {len(self.indexes)} indexes>"
     
     def __str__(self):
+        """String representation of SearchEngine object, uses __repr__"""
         return self.__repr__()
 

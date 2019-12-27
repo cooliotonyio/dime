@@ -12,14 +12,17 @@ def load_index(engine, index_name):
 
 class Index():
     def __init__(self, engine, index_params):
-        """Index class
+        """
+        Index class
         
-        index_params: {
-            "name":             name of the index
-            "model_name":       name of the model of index
-            "dataset_name":     name of the dataset of index
-            "binarized":        boolean of whether the index embedding are binarized or not
-            "threshold":        threshold for binarization
+        Parameters:
+        engine (SearchEngine): SearchEngine instance that model is part of
+        index_params (dict): {
+            "name":             (str) name of the index
+            "model_name":       (str) name of the model of index
+            "dataset_name":     (str) name of the dataset of index
+            "binarized":        (bool) boolean of whether the index embedding are binarized or not
+            "threshold":        (float) threshold for binarization
         }
         """
         self.params = index_params

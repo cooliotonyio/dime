@@ -3,10 +3,9 @@ import warnings
 import os
 import pickle
 import json
-from sklearn.preprocessing import binarize
 
 def load_model(engine, model_name):
-    """Loads a saved index"""
+    """Loads a saved model"""
     model_dir = f"{engine.model_dir}/{model_name}"
     with open(f"{model_dir}/model.txt", "r") as f:
         model_params = json.loads(f.read())
@@ -20,18 +19,18 @@ class Model():
     
     def __init__(self, engine, model_params):
         """
-        Initializes Model obkect
+        Initializes Model object
         
         Parameters:
-        name (string): Name of network, used as dictionary key in SearchEngine object
-        modalities (list of strings): Ordered list of modalities
-        embedding_nets (list of callables): Ordered list of either functions or callable networks
-        input_dimensions (list of ints): Ordered list of input dimensions for each embedding_net
-        output dimension (int): Output dimension of the model
-        desc (string): Description of model
-        
-        Returns:
-        Model: Model object
+        engine (SearchEngine): SearchEngine instance that model is part of
+        model_params (dict): {
+            "name":             (str) Name of the model
+            "output_dim":       (str) Dimension of an output of the model
+            "modalities":       (list) A list of modalities the model supports
+            "embedding_nets":   (list) A list of callables corresponding to each modality
+            "input_dim":        (list) A list of tuples corresponding to each modality
+            "desc":             (str) A description
+        }
         """
         self.engine = engine
         self.params = model_params
@@ -46,7 +45,8 @@ class Model():
 
         self.preprocessors = [None for _ in range(len(self.modalities))]
 
-        assert len(self.modalities) == len(self.embedding_nets) == len(self.input_dim)
+        assert len(self.modalities) == len(self.embedding_nets) == len(self.input_dim), + \
+            "Unexpected number of modalities/embedding_nets/input_dim"
         
         if self.cuda:
             for embedding_net in self.embedding_nets:
@@ -54,6 +54,9 @@ class Model():
                     embedding_net.cuda()
                 except:
                     continue
+
+        if [modality for modality in self.modalities.keys() if modality not in self.engine.modalities]:
+            warnings.warn("Model created with unsupported modalities")
 
     def can_call(self, modality, input_dim):
         """Returns if model can be called on 'modality' with 'input_dim'"""
