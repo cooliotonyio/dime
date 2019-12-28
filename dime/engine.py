@@ -1,22 +1,21 @@
 import numpy as np
 import os
 import time
+import json
 from sklearn.preprocessing import binarize
 import warnings
 
-from dime.dataset import Dataset, ImageDataset
-from dime.index import Index
-from dime.model import Model
+from dime.dataset import Dataset, ImageDataset, load_dataset
+from dime.index import Index, load_index
+from dime.model import Model, load_model
 
 def load_engine(engine_path):
     #TODO: write this function
-    pass
+    with open(engine_path, "r") as f:
+        engine_params = json.loads(f.read())
+    return SearchEngine(engine_params)
 
 class SearchEngine():
-    """
-    Search Engine Class
-    """
-
     def __init__(self, engine_params):
         """
         Initializes SearchEngine object
@@ -33,6 +32,8 @@ class SearchEngine():
             "modalities":       (list of str) The modalities support by this instance
         }
         """
+        self.params = engine_params
+
         self.name = engine_params["name"]
         self.cuda = engine_params["cuda"]
         self.verbose = engine_params["verbose"]
@@ -48,11 +49,52 @@ class SearchEngine():
         self.modalities = {}
 
         self.modalities = {m: {
-            "model_names":[], 
+            "dataset_names":[],
             "index_names":[], 
-            "dataset_names":[]
+            "model_names":[], 
             } for m in engine_params["modalities"] }
+        
+        if engine_params["modality_dicts"]:
+            for modality in self.modalities:
+                modality_dict = engine_params["modality_dicts"][modality]
+                for dataset_name in modality_dict["dataset_names"]:
+                    dataset = load_dataset(self, dataset_name)
+                    self.datasets[dataset.name] = dataset
+                    self.modalities[dataset.modality]["dataset_names"].append(dataset.name)
+                for index_name in modality_dict["index_names"]:
+                    index = load_index(self, index_name)
+                    self.indexes[index.name] = index
+                    self.modalities[index.modality]["index_names"].append(index.name)
+                for model_name in modality_dict["model_names"]:
+                    model = load_model(self, model_name)
+                    self.models[model.name] = model
+                    for modality in model.modalities:
+                        self.modalities[modality]["model_names"].append(model.name)
             
+    def save(self, shallow = False):
+        info = {
+            "name": self.name,
+            "cuda": self.cuda,
+            "verbose": self.verbose,
+            "dataset_dir": self.dataset_dir,
+            "index_dir": self.index_dir,
+            "model_dir": self.model_dir,
+            "embedding_dir": self.embedding_dir,
+            "modality_dicts": self.modalities,
+            "modalities": list(self.modalities.keys())
+        }
+
+        if not shallow:
+            for _, dataset in self.datasets.items():
+                dataset.save()
+            for _, index in self.indexes.items():
+                index.save()
+            for _, model in self.models.items():
+                model.save()
+
+        with open(f"{self.name}.engine", "w+") as f:
+            f.write(json.dumps(info))
+
     def valid_index_names(self, tensor, modality):
         """
         Returns a list of names of all indexes that are valid given a tensor and modality
@@ -145,8 +187,8 @@ class SearchEngine():
 
         model = Model(self, model_params)
         self.models[model.name] = model
-        for modality in model_params["modalities"]:
-            self.modalities[modality]['model_names'].append(model.name)
+        for modality in model.modalities:
+            self.modalities[modality]["model_names"].append(model.name)
         if self.verbose:
             print("Model '{}' added".format(model.name))
 
@@ -188,7 +230,7 @@ class SearchEngine():
             dataset = Dataset(self, dataset_params)
         
         self.datasets[dataset.name] = dataset
-        self.modalities[dataset.modality]['dataset_names'].append(dataset.name)
+        self.modalities[dataset.modality]["dataset_names"].append(dataset.name)
         
         if self.verbose:
             print("Dataset '{}' added".format(dataset.name))
@@ -212,6 +254,7 @@ class SearchEngine():
         model = self.models[index_params["model_name"]]
         assert dataset.modality in model.modalities, "Model does not support dataset modality"
         assert force_add or index_params["name"] not in self.indexes, "Index with given name already exists"
+        index_params["modality"] = dataset.modality
 
         post_processing = ""
         if "binarized" in index_params and index_params["binarized"]:
@@ -235,7 +278,7 @@ class SearchEngine():
         if load_embeddings:
             for batch_idx, embeddings in self.load_embeddings(embedding_dir, model, post_processing):
                 if self.verbose and not (batch_idx % message_freq):
-                    print("Processing batch {} of {}".format(batch_idx, num_batches))
+                    print("Loading batch {} of {}".format(batch_idx, num_batches))
                 start_index = batch_idx + 1
                 index.add(embeddings)
 
@@ -259,7 +302,7 @@ class SearchEngine():
             print("Finished building index {} in {} seconds.".format(index.name, round(time_elapsed, 4)))
         
         self.indexes[index.name] = index
-        self.modalities[dataset.modality]['index_names'].append(index.name)
+        self.modalities[index.modality]["index_names"].append(index.name)
 
         return index.name
             
@@ -356,4 +399,3 @@ class SearchEngine():
     def __str__(self):
         """String representation of SearchEngine object, uses __repr__"""
         return self.__repr__()
-

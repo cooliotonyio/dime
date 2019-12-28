@@ -10,9 +10,6 @@ def load_dataset(engine, dataset_name):
     raise NotImplementedError()
 
 class Dataset():
-    """
-    Wrapper class around a dataset
-    """
     def __init__(self, engine, dataset_params):
         """
         Wrapper class around a dataset
@@ -153,4 +150,3 @@ class ImageDataset(Dataset):
                 if self.engine.cuda:
                     batch = batch.cuda()
                 yield batch_idx, batch
-

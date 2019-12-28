@@ -16,7 +16,6 @@ def load_model(engine, model_name):
     return Model(engine, model_params)
 
 class Model():
-    
     def __init__(self, engine, model_params):
         """
         Initializes Model object
@@ -48,7 +47,6 @@ class Model():
         assert len(self.modalities) == len(self.embedding_nets) == len(self.input_dim), \
             "Unexpected number of modalities/embedding_nets/input_dim"
         
-        
         for embedding_net in self.embedding_nets:
             try:
                 embedding_net.eval()
@@ -75,7 +73,6 @@ class Model():
                 return True
         return False
                 
-        
     def add_preprocessor(self, modality, preprocessor):
         """
         Adds a preprocessing method to a specific embedding_net
@@ -120,16 +117,16 @@ class Model():
     
     def save(self):
         """Save the model"""
-        info = json.dumps({
+        info = {
             "name": self.name,
             "modalities": self.params["modalities"],
             "input_dim": self.input_dim,
             "output_dim": self.output_dim,
             "desc": self.desc
-        })
+        }
         model_dir = f"{self.engine.model_dir}/{self.name}"
         with open(f"{model_dir}/model.txt", "w+") as f:
-            f.write(info)
+            f.write(json.dumps(info))
         for modality_index, embedding_net in enumerate(self.embedding_nets):
             with open(f"{model_dir}/embedding_nets/{self.modalities[modality_index]}.pkl", "wb+") as f:
                 pickle.dump(embedding_net, f)

@@ -21,17 +21,19 @@ class Index():
             "name":         (str) name of the index
             "model_name":   (str) name of the model of index
             "dataset_name": (str) name of the dataset of index
+            "modality":     (str) modality of dataset being indexed
             "binarized":    (bool) boolean of whether the index embedding are binarized or not
             "threshold":    (float) threshold for binarization
             "desc":         (str) A description 
         }
         """
-        self.params = index_params
         self.engine = engine
-
+        self.params = index_params
+        
         self.name = index_params["name"]
         self.model_name = index_params["model_name"]
         self.dataset_name = index_params["dataset_name"]
+        self.modality = index_params["modality"]
         self.binarized = index_params["binarized"]
         self.desc = index_params["desc"] if "desc" in index_params else index_params["name"]
         
