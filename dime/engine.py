@@ -5,12 +5,11 @@ import json
 from sklearn.preprocessing import binarize
 import warnings
 
-from dime.dataset import Dataset, ImageDataset, load_dataset
+from dime.dataset import Dataset, ImageDataset, TextDataset, load_dataset
 from dime.index import Index, load_index
 from dime.model import Model, load_model
 
 def load_engine(engine_path):
-    #TODO: write this function
     with open(engine_path, "r") as f:
         engine_params = json.loads(f.read())
     return SearchEngine(engine_params)
@@ -54,7 +53,7 @@ class SearchEngine():
             "model_names":[], 
             } for m in engine_params["modalities"] }
         
-        if engine_params["modality_dicts"]:
+        if "modality_dicts" in engine_params:
             for modality in self.modalities:
                 modality_dict = engine_params["modality_dicts"][modality]
                 for dataset_name in modality_dict["dataset_names"]:
@@ -66,10 +65,11 @@ class SearchEngine():
                     self.indexes[index.name] = index
                     self.modalities[index.modality]["index_names"].append(index.name)
                 for model_name in modality_dict["model_names"]:
-                    model = load_model(self, model_name)
-                    self.models[model.name] = model
-                    for modality in model.modalities:
-                        self.modalities[modality]["model_names"].append(model.name)
+                    if model_name not in self.models:
+                        model = load_model(self, model_name)
+                        self.models[model.name] = model
+                        for model_modality in model.modalities:
+                            self.modalities[model_modality]["model_names"].append(model.name)
             
     def save(self, shallow = False):
         info = {
@@ -224,8 +224,10 @@ class SearchEngine():
             assert (dataset_params["name"] not in self.datasets), "Dataset with given name already in self.datasets"
         assert (dataset_params["modality"] in self.modalities), f"Modality not supported by {str(self)}"
 
-        if dataset_params["modality"] == "image":
+        if "image" == dataset_params["modality"]:
             dataset = ImageDataset(self, dataset_params)
+        elif "text" == dataset_params["modality"]:
+            dataset = TextDataset(self, dataset_params)
         else:
             dataset = Dataset(self, dataset_params)
         
@@ -282,20 +284,22 @@ class SearchEngine():
                 start_index = batch_idx + 1
                 index.add(embeddings)
 
-        for batch_idx, batch in dataset.get_data(batch_size, start_index = start_index):
-            if self.verbose and not (batch_idx % message_freq):
-                print("Processing batch {} of {}".format(batch_idx, num_batches))
+        if start_index < num_batches:
+            print(start_index)
+            for batch_idx, batch in dataset.get_data(batch_size, start_index = start_index):
+                if self.verbose and not (batch_idx % message_freq):
+                    print("Processing batch {} of {}".format(batch_idx, num_batches))
 
-            embeddings = model.get_embedding(batch, dataset.modality)
-            if post_processing == "binarized":
-                embeddings = binarize(embeddings)
+                embeddings = model.get_embedding(batch, dataset.modality)
+                if post_processing == "binarized":
+                    embeddings = binarize(embeddings)
 
-            embeddings = embeddings.detach().cpu().numpy()
-            index.add(embeddings)
+                embeddings = embeddings.detach().cpu().numpy()
+                index.add(embeddings)
 
-            if save_embeddings:
-                filename = "batch_{}".format(str(batch_idx).zfill(batch_magnitude))
-                self.save_batch(embeddings, filename, embedding_dir, post_processing = post_processing)
+                if save_embeddings:
+                    filename = "batch_{}".format(str(batch_idx).zfill(batch_magnitude))
+                    self.save_batch(embeddings, filename, embedding_dir, post_processing = post_processing)
 
         if self.verbose:
             time_elapsed = time.time() - start_time
@@ -399,3 +403,15 @@ class SearchEngine():
     def __str__(self):
         """String representation of SearchEngine object, uses __repr__"""
         return self.__repr__()
+
+    def target_to_tensor(self, target, dataset_name):
+        """
+        Convert a raw target data into a useable tensor as if it came from a given dataset
+
+        Parameters:
+        target (object): some target to to turn into a tensor
+        dataset_name (str): name of dataset that tensor should look like it came from
+        """
+        dataset = self.datasets[dataset_name]
+        return dataset.target_to_tensor(target)
+            

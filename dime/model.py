@@ -10,8 +10,8 @@ def load_model(engine, model_name):
     with open(f"{model_dir}/model.txt", "r") as f:
         model_params = json.loads(f.read())
     model_params["embedding_nets"] = []
-    for f in os.listdir(f"{model_dir}/embedding_nets/"):
-        with open(f, "rb"):
+    for embedding_net_file in os.listdir(f"{model_dir}/embedding_nets/"):
+        with open(embedding_net_file, "rb") as f:
             model_params["embedding_nets"].append(pickle.load(f))
     return Model(engine, model_params)
 
@@ -117,16 +117,20 @@ class Model():
     
     def save(self):
         """Save the model"""
+        model_modalities = self.params["modalities"]
         info = {
             "name": self.name,
-            "modalities": self.params["modalities"],
+            "modalities": model_modalities,
             "input_dim": self.input_dim,
             "output_dim": self.output_dim,
             "desc": self.desc
         }
-        model_dir = f"{self.engine.model_dir}/{self.name}"
+        model_dir = os.path.normpath(f"{self.engine.model_dir}/{self.name}/")
+        embedding_net_dir = os.path.normpath(f"{model_dir}/embedding_nets/")
+        if not os.path.isdir(embedding_net_dir):
+            os.makedirs(embedding_net_dir)
         with open(f"{model_dir}/model.txt", "w+") as f:
             f.write(json.dumps(info))
         for modality_index, embedding_net in enumerate(self.embedding_nets):
-            with open(f"{model_dir}/embedding_nets/{self.modalities[modality_index]}.pkl", "wb+") as f:
+            with open(f"{embedding_net_dir}/{model_modalities[modality_index]}.nn.pkl", "wb+") as f:
                 pickle.dump(embedding_net, f)

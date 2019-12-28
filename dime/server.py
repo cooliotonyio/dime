@@ -35,21 +35,8 @@ def allowed_file(filename):
     return "." in filename and \
            filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
     
-def target_to_tensor(target, modality):
-    search_engine = app.search_engine
-    if "text" == modality:
-        if target in FAST_TEXT:
-            tensor = FAST_TEXT[target]
-        else:
-            raise KeyError("No tensor representation of '{}' in text dataset".format(str(target)))
-    elif "image" == modality:
-        image = PIL.Image.open(target)
-        image_transform = transforms.Compose([
-            transforms.Resize((224,224)),
-            transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
-        tensor = image_transform(image)
-    elif "dataset" == modality:
+def target_to_tensor(target, dataset):
+    if "dataset" == modality:
         dataset_name, idx = target
         assert dataset_name in search_engine.datasets, "Target dataset '{}' not a valid dataset".format(dataset_name)
         new_target = search_engine.target_from_idx(idx, dataset_name)[0]
