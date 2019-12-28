@@ -4,9 +4,13 @@ import time
 from sklearn.preprocessing import binarize
 import warnings
 
-from dime.dataset import Dataset
+from dime.dataset import Dataset, ImageDataset
 from dime.index import Index
 from dime.model import Model
+
+def load_engine(engine_path):
+    #TODO: write this function
+    pass
 
 class SearchEngine():
     """
@@ -137,11 +141,7 @@ class SearchEngine():
         """
         if not force_add:
             assert (model_params["name"] not in self.models), "Model with given name already in self.models"
-        assert [m for m in model_params["modalities"] if m not in self.modalities], f"Modalities not supported by {str(self)}"
-
-        if "desc" not in model_params:
-            warnings.warn("'desc' not provided in model_params, using 'name' as default")
-            model_params["desc"] = model_params["name"]
+        assert not [m for m in model_params["modalities"] if m not in self.modalities], f"Modalities not supported by {str(self)}"
 
         model = Model(self, model_params)
         self.models[model.name] = model
@@ -150,6 +150,21 @@ class SearchEngine():
         if self.verbose:
             print("Model '{}' added".format(model.name))
 
+    def add_preprocessor(self, model_name, modality, preprocessor):
+        """
+        Adds a preprocessing method for a modality for a model
+        
+        Parameters:
+        model_name (str): The model that should have a preprocessor
+        modality (str): Modality of corresponding embedding_net
+        preprocessor_name (str or callable): Either name of a preprocessing model or a callable
+        """
+        model = self.models[model_name]
+        if type(preprocessor) == str:
+            if (modality not in self.models[preprocessor].modalities):
+                warnings.warn(f"Preprocessor {preprocessor} is not compatible with modality {modality}")
+        model.add_preprocessor(modality, preprocessor)
+    
     def add_dataset(self, dataset_params, force_add = False):
         """
         Initializes dataset object
@@ -167,10 +182,13 @@ class SearchEngine():
             assert (dataset_params["name"] not in self.datasets), "Dataset with given name already in self.datasets"
         assert (dataset_params["modality"] in self.modalities), f"Modality not supported by {str(self)}"
 
-        dataset = Dataset(self, dataset_params)
+        if dataset_params["modality"] == "image":
+            dataset = ImageDataset(self, dataset_params)
+        else:
+            dataset = Dataset(self, dataset_params)
         
         self.datasets[dataset.name] = dataset
-        self.modalities[dataset.modality]['datasets'].append(dataset.name)
+        self.modalities[dataset.modality]['dataset_names'].append(dataset.name)
         
         if self.verbose:
             print("Dataset '{}' added".format(dataset.name))
@@ -193,7 +211,7 @@ class SearchEngine():
         dataset = self.datasets[index_params["dataset_name"]]
         model = self.models[index_params["model_name"]]
         assert dataset.modality in model.modalities, "Model does not support dataset modality"
-        assert force_add or index_params["name"] not in model.indexes, "Index with given name already exists"
+        assert force_add or index_params["name"] not in self.indexes, "Index with given name already exists"
 
         post_processing = ""
         if "binarized" in index_params and index_params["binarized"]:
@@ -210,22 +228,20 @@ class SearchEngine():
             start_time = time.time()
             print("Building {}, {} index".format(model.name, dataset.name))
 
-        num_batches = np.ceil(len(dataset) / batch_size)
+        num_batches = int(np.ceil(len(dataset) / batch_size))
         batch_magnitude = len(str(num_batches))
 
+        start_index = 0
         if load_embeddings:
             for batch_idx, embeddings in self.load_embeddings(embedding_dir, model, post_processing):
-                start_index = batch_idx
+                start_index = batch_idx + 1
                 index.add(embeddings)
-            start_index += 1
-        else:
-            start_index = 0
 
         for batch_idx, batch in dataset.get_data(batch_size, start_index = start_index):
             if self.verbose and not (batch_idx % message_freq):
                 print("Processing batch {} of {}".format(batch_idx, num_batches))
 
-            embeddings = model.get_embedding(batch)
+            embeddings = model.get_embedding(batch, dataset.modality)
             if post_processing == "binarized":
                 embeddings = binarize(embeddings)
 
@@ -243,7 +259,6 @@ class SearchEngine():
         self.modalities[dataset.modality]['index_names'].append(index.name)
 
         return index.name
-        
             
     def target_from_idx(self, indicies, dataset_name):
         """Takes either an int or a list of ints and returns corresponding targets of dataset
@@ -328,11 +343,11 @@ class SearchEngine():
      
     def __repr__(self):
         """Representation of SearchEngine object, quick summary of assets"""
-        return f"SearchEngine< \
-            {len(self.modalities)} modalities, \
-            {len(self.models)} models, \
-            {len(self.datasets)} datasets, \
-            {len(self.indexes)} indexes>"
+        return "SearchEngine<" + \
+            f"{len(self.modalities)} modalities, " + \
+            f"{len(self.models)} models, " + \
+            f"{len(self.datasets)} datasets, " + \
+            f"{len(self.indexes)} indexes>"
     
     def __str__(self):
         """String representation of SearchEngine object, uses __repr__"""

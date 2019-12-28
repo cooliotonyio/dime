@@ -25,7 +25,7 @@ class Model():
         engine (SearchEngine): SearchEngine instance that model is part of
         model_params (dict): {
             "name":             (str) Name of the model
-            "output_dim":       (str) Dimension of an output of the model
+            "output_dim":       (tuple) Dimension of an output of the model
             "modalities":       (list) A list of modalities the model supports
             "embedding_nets":   (list) A list of callables corresponding to each modality
             "input_dim":        (list) A list of tuples corresponding to each modality
@@ -41,19 +41,21 @@ class Model():
         self.embedding_nets = model_params["embedding_nets"]
         self.input_dim = model_params["input_dim"]
         self.cuda = engine.cuda
-        self.desc = model_params["desc"]
+        self.desc = model_params["desc"] if "desc" in model_params else model_params["name"]
 
         self.preprocessors = [None for _ in range(len(self.modalities))]
 
-        assert len(self.modalities) == len(self.embedding_nets) == len(self.input_dim), + \
+        assert len(self.modalities) == len(self.embedding_nets) == len(self.input_dim), \
             "Unexpected number of modalities/embedding_nets/input_dim"
         
-        if self.cuda:
-            for embedding_net in self.embedding_nets:
-                try:
+        
+        for embedding_net in self.embedding_nets:
+            try:
+                embedding_net.eval()
+                if self.cuda:
                     embedding_net.cuda()
-                except:
-                    continue
+            except:
+                continue
 
         if [modality for modality in self.modalities.keys() if modality not in self.engine.modalities]:
             warnings.warn("Model created with unsupported modalities")
@@ -74,28 +76,28 @@ class Model():
         return False
                 
         
-    def add_preprocessing(self, modality, preprocessor):
+    def add_preprocessor(self, modality, preprocessor):
         """
         Adds a preprocessing method to a specific embedding_net
-        #TODO: change to use a preprocessing model
         
-        Paramaters:
+        Parameters:
         modality (str): Modality of corresponding embedding_net
         preprocessor_name (str or callable): Either name of a preprocessing model or a callable
         """
         i = self.modalities[modality]
         self.preprocessors[i] = preprocessor
 
-    def get_embedding(self, batch, modality, preprocessing = False):
+    def get_embedding(self, batch, modality, preprocessing = True):
         """Get embedding of a batch"""
         i = self.modalities[modality]
-        if preprocessing:
+        if preprocessing and self.preprocessors[i] is not None:
             preprocessor = self.preprocessors[i]
             if type(preprocessor) == str:
-                batch = self.engine.models[preprocessor].batch_embedding(batch, modality, preprocessing = False)
+                #TODO: change this so that preprocessed items are loaded instead of being calculated
+                batch = self.engine.models[preprocessor].get_embedding(batch, modality, preprocessing = preprocessing)
             else:
-                batch = preprocessor(*batch)
-        return self.embedding_nets[i](*batch)
+                batch = preprocessor(batch)
+        return self.embedding_nets[i](batch)
 
     def get_info(self):
         """

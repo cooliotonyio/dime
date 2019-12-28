@@ -18,11 +18,12 @@ class Index():
         Parameters:
         engine (SearchEngine): SearchEngine instance that model is part of
         index_params (dict): {
-            "name":             (str) name of the index
-            "model_name":       (str) name of the model of index
-            "dataset_name":     (str) name of the dataset of index
-            "binarized":        (bool) boolean of whether the index embedding are binarized or not
-            "threshold":        (float) threshold for binarization
+            "name":         (str) name of the index
+            "model_name":   (str) name of the model of index
+            "dataset_name": (str) name of the dataset of index
+            "binarized":    (bool) boolean of whether the index embedding are binarized or not
+            "threshold":    (float) threshold for binarization
+            "desc":         (str) A description 
         }
         """
         self.params = index_params
@@ -32,14 +33,14 @@ class Index():
         self.model_name = index_params["model_name"]
         self.dataset_name = index_params["dataset_name"]
         self.binarized = index_params["binarized"]
-        self.desc = index_params["desc"]
+        self.desc = index_params["desc"] if "desc" in index_params else index_params["name"]
         
         if self.binarized:
             self.threshold = index_params["threshold"]
 
-        self.dim = tuple(self.engine.models[self.model_name].output_dimension)
-        #TODO: cuda this?
-        self.index = faiss.IndexFlatL2(self.dim)
+        self.dim = tuple(self.engine.models[self.model_name].output_dim)
+        assert len(self.dim) == 1, "FAISS search only supports 1 dimensional vectors"
+        self.index = faiss.IndexFlatL2(self.dim[0])
     
     def add(self, embeddings):
         """Add embeddings to index"""
