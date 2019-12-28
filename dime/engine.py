@@ -57,19 +57,33 @@ class SearchEngine():
             for modality in self.modalities:
                 modality_dict = engine_params["modality_dicts"][modality]
                 for dataset_name in modality_dict["dataset_names"]:
+                    if self.verbose:
+                        print(f"Loading dataset '{dataset_name}'... ", end = "")
                     dataset = load_dataset(self, dataset_name)
                     self.datasets[dataset.name] = dataset
                     self.modalities[dataset.modality]["dataset_names"].append(dataset.name)
-                for index_name in modality_dict["index_names"]:
-                    index = load_index(self, index_name)
-                    self.indexes[index.name] = index
-                    self.modalities[index.modality]["index_names"].append(index.name)
+                    if self.verbose:
+                        print("done!")
+
                 for model_name in modality_dict["model_names"]:
                     if model_name not in self.models:
+                        if self.verbose:
+                            print(f"Loading model '{model_name}'... ", end = "")
                         model = load_model(self, model_name)
                         self.models[model.name] = model
                         for model_modality in model.modalities:
                             self.modalities[model_modality]["model_names"].append(model.name)
+                        if self.verbose:
+                            print("done!")
+                            
+                for index_name in modality_dict["index_names"]:
+                    if self.verbose:
+                        print(f"Loading index '{index_name}'... ", end = "")
+                    index = load_index(self, index_name)
+                    self.indexes[index.name] = index
+                    self.modalities[index.modality]["index_names"].append(index.name)
+                    if self.verbose:
+                        print("done!")
             
     def save(self, shallow = False):
         info = {
@@ -395,6 +409,7 @@ class SearchEngine():
     def __repr__(self):
         """Representation of SearchEngine object, quick summary of assets"""
         return "SearchEngine<" + \
+            f"name={self.name}, " + \
             f"{len(self.modalities)} modalities, " + \
             f"{len(self.models)} models, " + \
             f"{len(self.datasets)} datasets, " + \

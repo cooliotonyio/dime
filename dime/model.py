@@ -11,7 +11,7 @@ def load_model(engine, model_name):
         model_params = json.loads(f.read())
     model_params["embedding_nets"] = []
     for embedding_net_file in os.listdir(f"{model_dir}/embedding_nets/"):
-        with open(embedding_net_file, "rb") as f:
+        with open(f"{model_dir}/embedding_nets/{embedding_net_file}", "rb") as f:
             model_params["embedding_nets"].append(pickle.load(f))
     return Model(engine, model_params)
 

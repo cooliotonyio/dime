@@ -2,6 +2,7 @@ import numpy as np
 import os
 import pickle
 import PIL
+import warnings
 from sklearn.preprocessing import binarize
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
@@ -17,7 +18,7 @@ def load_dataset(engine, dataset_name):
     elif "text" == dataset_params["modality"]:
         assert "data" in dataset_params or "data_file" in dataset_params, "Dataset parameters needs to specify data"
         if "data" not in dataset_params:
-            with open(f"{engine.dataset_dir}/{dataset_params['data_file']}", "rb"):
+            with open(f"{engine.dataset_dir}/{dataset_params['data_file']}", "rb") as f:
                 dataset_params["data"] = pickle.load(f)
         return TextDataset(engine, dataset_params)
     else:
@@ -176,6 +177,9 @@ class TextDataset(Dataset):
             with open(f"{self.engine.dataset_dir}/{data_file}", "wb+") as f:
                 pickle.dump(self.data, f)
             info["data_file"] = data_file
+
+        if "data_file" not in info:
+            warnings.warn(f"TextDataset {self.name} parameters being saved without saved data")
 
         with open(f"{self.engine.dataset_dir}/{self.name}.dataset.pkl", "wb+") as f:
             pickle.dump(info, f)
