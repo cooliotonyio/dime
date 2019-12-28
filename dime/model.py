@@ -90,6 +90,7 @@ class Model():
     def get_embedding(self, batch, modality, preprocessing = True):
         """Get embedding of a batch"""
         i = self.modalities[modality]
+        num_batch = (len(batch),)
         if preprocessing and self.preprocessors[i] is not None:
             preprocessor = self.preprocessors[i]
             if type(preprocessor) == str:
@@ -97,7 +98,7 @@ class Model():
                 batch = self.engine.models[preprocessor].get_embedding(batch, modality, preprocessing = preprocessing)
             else:
                 batch = preprocessor(batch)
-        return self.embedding_nets[i](batch)
+        return self.embedding_nets[i](batch).view(num_batch + self.output_dim)
 
     def get_info(self):
         """

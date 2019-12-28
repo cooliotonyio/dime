@@ -234,6 +234,8 @@ class SearchEngine():
         start_index = 0
         if load_embeddings:
             for batch_idx, embeddings in self.load_embeddings(embedding_dir, model, post_processing):
+                if self.verbose and not (batch_idx % message_freq):
+                    print("Processing batch {} of {}".format(batch_idx, num_batches))
                 start_index = batch_idx + 1
                 index.add(embeddings)
 
@@ -245,6 +247,7 @@ class SearchEngine():
             if post_processing == "binarized":
                 embeddings = binarize(embeddings)
 
+            embeddings = embeddings.detach().cpu().numpy()
             index.add(embeddings)
 
             if save_embeddings:
@@ -306,16 +309,17 @@ class SearchEngine():
         Returns:
         arraylike: loaded batch
         """
+        path = os.path.normpath(f"{embedding_dir}/{filename}")
         if post_processing == "binarized":
             #TODO: confirm this works
-            batch = np.array(np.unpackbits(np.load(f"{embedding_dir}/{filename}")), dtype="float32")
+            batch = np.array(np.unpackbits(np.load(path)), dtype="float32")
             rows = len(batch) // dim
             batch = batch.reshape(rows, dim)
         else:
-            batch = np.load(filename).astype("float32")
+            batch = np.load(path).astype("float32")
 
-        if tuple(batch.shape[-len(dim)]) != tuple(dim):
-            warnings.warn(f"Loaded batch has dimension {batch.shape[-len(dim)]} but was expected to be {dim}")
+        if tuple(batch.shape[-len(dim):]) != tuple(dim):
+            warnings.warn(f"Loaded batch has dimension {batch.shape[-len(dim):]} but was expected to be {dim}")
 
         return batch
 
