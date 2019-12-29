@@ -12,7 +12,7 @@ from dime.utils import BatchKeySampler
 def load_dataset(engine, dataset_name):
     with open(f"{engine.dataset_dir}/{dataset_name}.dataset.pkl", "rb") as f:
         dataset_params = pickle.load(f)
-    
+
     if "image" == dataset_params["modality"]:
         return ImageDataset(engine, dataset_params)
     elif "text" == dataset_params["modality"]:
@@ -24,7 +24,6 @@ def load_dataset(engine, dataset_name):
     else:
         raise NotImplementedError()
     
-
 class Dataset():
     def __init__(self, engine, dataset_params):
         """
@@ -96,7 +95,7 @@ class ImageDataset(Dataset):
         self.data_dir = os.path.normpath(dataset_params["data_dir"])
         self.transform = dataset_params["transform"]
         self.modality = dataset_params["modality"]
-        self.dim = dataset_params["dim"]
+        self.dim = tuple(dataset_params["dim"])
         self.desc = dataset_params["desc"]
 
         self.data = ImageFolder(
@@ -118,7 +117,6 @@ class ImageDataset(Dataset):
         Returns:
         list: list of filenames corresponding to provided indicies
         """
-        #TODO: rename this function?
         if type(indicies) == int:
             return self.filenames[indicies]
         return [self.filenames[i] for i in indicies]
@@ -128,13 +126,14 @@ class ImageDataset(Dataset):
         image = PIL.Image.open(target)
         return self.transform(image)
 
-    def save(self):
+    def save(self, save_data = False):
         """Save the dataset"""
         info = self.params
         with open(f"{self.engine.dataset_dir}/{self.name}.dataset.pkl", "wb+") as f:
             pickle.dump(info, f)
 
 class TextDataset(Dataset):
+    #TODO: memory optimuize this class
     def __init__(self, engine, dataset_params):
         """Dataset class specific to images
         
@@ -159,7 +158,7 @@ class TextDataset(Dataset):
         self.dim = dataset_params["dim"]
         self.desc = dataset_params["desc"]
 
-        self.targets = self.data.keys()
+        self.targets = list(self.data.keys())
 
     def save(self, save_data = False):
         """Save the dataset"""

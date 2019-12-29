@@ -7,7 +7,10 @@ def load_index(engine, index_name):
     with open(f"{engine.index_dir}/{index_name}.index", "r") as f:
         index_params = json.loads(f.read())
     index = Index(engine, index_params)
-    #TODO: add embeddings to index
+    model = engine.models[index.model_name]
+    embedding_dir = f"{engine.embedding_dir}/{index.model_name}/{index.dataset_name}/{index.post_processing}/"
+    for _, embeddings in engine.load_embeddings(embedding_dir, model, index.post_processing):
+        index.add(embeddings)
     return index
 
 class Index():
@@ -18,13 +21,13 @@ class Index():
         Parameters:
         engine (SearchEngine): SearchEngine instance that model is part of
         index_params (dict): {
-            "name":         (str) name of the index
-            "model_name":   (str) name of the model of index
-            "dataset_name": (str) name of the dataset of index
-            "modality":     (str) modality of dataset being indexed
-            "binarized":    (bool) boolean of whether the index embedding are binarized or not
-            "threshold":    (float) threshold for binarization
-            "desc":         (str) A description 
+            "name":             (str) name of the index
+            "model_name":       (str) name of the model of index
+            "dataset_name":     (str) name of the dataset of index
+            "modality":         (str) modality of dataset being indexed
+            "post_processing":  (str) "binarized" or ""
+            "threshold":        (float) threshold for binarization
+            "desc":             (str) A description 
         }
         """
         self.engine = engine
@@ -34,11 +37,14 @@ class Index():
         self.model_name = index_params["model_name"]
         self.dataset_name = index_params["dataset_name"]
         self.modality = index_params["modality"]
-        self.binarized = index_params["binarized"]
         self.desc = index_params["desc"] if "desc" in index_params else index_params["name"]
-        
-        if self.binarized:
-            self.threshold = index_params["threshold"]
+
+        if "post_processing" in index_params:
+            self.post_processing = index_params["post_processing"]
+            if "binarized" == self.post_processing:
+                self.threshold = index_params["threshold"]
+        else:
+            self.post_processing = ""
 
         self.dim = tuple(self.engine.models[self.model_name].output_dim)
         assert len(self.dim) == 1, "FAISS search only supports 1 dimensional vectors"
@@ -62,5 +68,5 @@ class Index():
 
     def __len__(self):
         """Returns length of index"""
-        return len(self.index)
+        return self.index.ntotal
         

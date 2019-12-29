@@ -10,8 +10,8 @@ def load_model(engine, model_name):
     with open(f"{model_dir}/model.txt", "r") as f:
         model_params = json.loads(f.read())
     model_params["embedding_nets"] = []
-    for embedding_net_file in os.listdir(f"{model_dir}/embedding_nets/"):
-        with open(f"{model_dir}/embedding_nets/{embedding_net_file}", "rb") as f:
+    for modality in model_params["modalities"]:
+        with open(f"{model_dir}/embedding_nets/{modality}.nn.pkl", "rb") as f:
             model_params["embedding_nets"].append(pickle.load(f))
     return Model(engine, model_params)
 
@@ -35,17 +35,17 @@ class Model():
         self.params = model_params
 
         self.name = model_params["name"]
-        self.output_dim = model_params["output_dim"]
+        self.output_dim = tuple(model_params["output_dim"])
         self.modalities = {modality: i for i, modality in enumerate(model_params["modalities"])}
         self.embedding_nets = model_params["embedding_nets"]
-        self.input_dim = model_params["input_dim"]
+        self.input_dim = [tuple(dim) for dim in model_params["input_dim"]]
         self.cuda = engine.cuda
         self.desc = model_params["desc"] if "desc" in model_params else model_params["name"]
 
         self.preprocessors = [None for _ in range(len(self.modalities))]
 
         assert len(self.modalities) == len(self.embedding_nets) == len(self.input_dim), \
-            "Unexpected number of modalities/embedding_nets/input_dim"
+            f"Unexpected number of modalities/embedding_nets/input_dim ({len(self.modalities)}/{len(self.embedding_nets)}/{len(self.input_dim)})"
         
         for embedding_net in self.embedding_nets:
             try:

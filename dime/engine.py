@@ -8,11 +8,15 @@ import warnings
 from dime.dataset import Dataset, ImageDataset, TextDataset, load_dataset
 from dime.index import Index, load_index
 from dime.model import Model, load_model
+from dime.utils import load_batch, save_batch
 
 def load_engine(engine_path):
+    start_time = time.time()
     with open(engine_path, "r") as f:
         engine_params = json.loads(f.read())
-    return SearchEngine(engine_params)
+    engine = SearchEngine(engine_params)
+    engine.vprint(f"Finished loading engine in {round(time.time() - start_time, 3)} seconds")
+    return engine
 
 class SearchEngine():
     def __init__(self, engine_params):
@@ -57,57 +61,31 @@ class SearchEngine():
             for modality in self.modalities:
                 modality_dict = engine_params["modality_dicts"][modality]
                 for dataset_name in modality_dict["dataset_names"]:
-                    if self.verbose:
-                        print(f"Loading dataset '{dataset_name}'... ", end = "")
+
+                    self.vprint(f"Loading dataset '{dataset_name}'... ", end = "")
+                    start_time = time.time()
                     dataset = load_dataset(self, dataset_name)
                     self.datasets[dataset.name] = dataset
                     self.modalities[dataset.modality]["dataset_names"].append(dataset.name)
-                    if self.verbose:
-                        print("done!")
+                    self.vprint(f"done in {round(time.time() - start_time, 4)} seconds!")
 
                 for model_name in modality_dict["model_names"]:
                     if model_name not in self.models:
-                        if self.verbose:
-                            print(f"Loading model '{model_name}'... ", end = "")
+                        self.vprint(f"Loading model '{model_name}'... ", end = "")
+                        start_time = time.time()
                         model = load_model(self, model_name)
                         self.models[model.name] = model
                         for model_modality in model.modalities:
                             self.modalities[model_modality]["model_names"].append(model.name)
-                        if self.verbose:
-                            print("done!")
+                        self.vprint(f"done in {round(time.time() - start_time, 4)} seconds!")
                             
                 for index_name in modality_dict["index_names"]:
-                    if self.verbose:
-                        print(f"Loading index '{index_name}'... ", end = "")
+                    self.vprint(f"Loading index '{index_name}'... ", end = "")
+                    start_time = time.time()
                     index = load_index(self, index_name)
                     self.indexes[index.name] = index
                     self.modalities[index.modality]["index_names"].append(index.name)
-                    if self.verbose:
-                        print("done!")
-            
-    def save(self, shallow = False):
-        info = {
-            "name": self.name,
-            "cuda": self.cuda,
-            "verbose": self.verbose,
-            "dataset_dir": self.dataset_dir,
-            "index_dir": self.index_dir,
-            "model_dir": self.model_dir,
-            "embedding_dir": self.embedding_dir,
-            "modality_dicts": self.modalities,
-            "modalities": list(self.modalities.keys())
-        }
-
-        if not shallow:
-            for _, dataset in self.datasets.items():
-                dataset.save()
-            for _, index in self.indexes.items():
-                index.save()
-            for _, model in self.models.items():
-                model.save()
-
-        with open(f"{self.name}.engine", "w+") as f:
-            f.write(json.dumps(info))
+                    self.vprint(f"done in {round(time.time() - start_time, 4)} seconds!")
 
     def valid_index_names(self, tensor, modality):
         """
@@ -126,56 +104,48 @@ class SearchEngine():
     def buildable_indexes(self):
         """Returns (model, dataset) pairs that are compatible"""
         pass
-        #TODO: Write this function
-        
-    def get_embedding(self, tensor, model_name, modality, preprocessing = False, binarized = False, threshold = 0):
-        """
-        Transforms tensor to an embedding using a model
-
-        Parameters:
-        tensor (arraylike): Tensor to be processed
-        model_name (str): Name of model to process with
-        modality (str): Modality of tensor, should supported by model
-        preprocessing (bool): True if tensor should be preprocessed before using model
-        binarized (bool): True if embedding should be binarized in post-processing
-        threshold (float): Threshold for binarization, only used in binarization
-
-        Returns:
-        arraylike: Embedding of the tensor with the model
-        """
-        assert model_name in self.models, "Model not found"
-        batch = tensor[None,:]
-        if self.cuda:
-            #TODO: fix this if necessary?
-            pass
+        #TODO: Write this functiont"
+    
+    def get_embedding(self, model_name, batch, modality, preprocessing = True):
         model = self.models[model_name]
-        embedding = model.get_embedding(batch, modality, preprocessing = preprocessing)[0]
-        if binarized:
-            embedding = binarize(embedding, threshold = threshold)
-        return embedding
-            
-    def search(self, embeddings, index_name, n = 5):
+        if self.cuda:
+            batch = batch.cuda()
+        embeddings = model.get_embedding(batch, modality, preprocessing = preprocessing)
+        if self.cuda:
+            embeddings = embeddings.detach().cpu()
+        return embeddings.numpy()
+
+    def search(self, tensor, tensor_modality, index_name, n = 5, preprocessing = True):
         """
         Searches index for nearest n neighbors for embedding(s)
 
         Parameters
-        embeddings (arraylike or list of arraylikes): Input embeddings to search with
+        tensor (arraylike or list of arraylikes): Input embeddings to search with
         index_name (str): Name of index to search in
         n (int): Number of results to be returned per embedding
+        preprocessing (bool): if tensor should be preprocessed before embedding extraction
 
         Returns:
         float(s), int(s): Distances and indicies of each result in dataset
         """
         assert index_name in self.indexes, "index_name not recognized"
         index = self.indexes[index_name]
-        if tuple(embeddings.shape) == index.dim:
-            embeddings = embeddings[None,:]
+        model = self.models[index.model_name]
+        assert tensor_modality in model.modalities, f"Model '{model.name}' does not support modality '{tensor_modality}'"
+
+        model_dim = model.input_dim[model.modalities[tensor_modality]]
+        if tuple(tensor.shape) == model_dim:
+            batch = tensor[None,:]
             is_single_vector = True
-        elif len(embeddings.shape) == (index.dim + 1) and tuple(embeddings.shape)[-len(index.dim)] == index.dim:
+        elif len(tensor.shape) == (len(model_dim) + 1) and tuple(tensor.shape)[-len(model_dim)] == model_dim:
             is_single_vector = False
         else:
-            raise RuntimeError(f"Provided embeddings of '{embeddings.shape}' " + \
-                "not compatible with index '{index.name}' of shape {index.dim} ")
+            raise RuntimeError(f"Provided tensor of shape '{tensor.shape}' " + \
+                f"not compatible with index model '{model.name}' of shape {model_dim}")
+
+        embeddings = self.get_embedding(model.name, batch, tensor_modality, preprocessing = preprocessing)
+        if index.post_processing == "binarized":
+            embeddings = binarize(embeddings)
 
         distances, idxs = index.search(embeddings, n)
 
@@ -203,8 +173,7 @@ class SearchEngine():
         self.models[model.name] = model
         for modality in model.modalities:
             self.modalities[modality]["model_names"].append(model.name)
-        if self.verbose:
-            print("Model '{}' added".format(model.name))
+        self.vprint("Model '{}' added".format(model.name))
 
     def add_preprocessor(self, model_name, modality, preprocessor):
         """
@@ -248,8 +217,7 @@ class SearchEngine():
         self.datasets[dataset.name] = dataset
         self.modalities[dataset.modality]["dataset_names"].append(dataset.name)
         
-        if self.verbose:
-            print("Dataset '{}' added".format(dataset.name))
+        self.vprint("Dataset '{}' added".format(dataset.name))
 
     def build_index(self, index_params, load_embeddings = True, save_embeddings = True, batch_size = 128, message_freq = 1000, force_add = False):
         """
@@ -260,7 +228,7 @@ class SearchEngine():
         load_embeddings (bool): True if function should use previously extracted embeddings if they exist
         save_embeddings (bool): True if extracted embeddings should be saved during the function
         batch_size (int): The size of a batch of data being processed
-        message_freq (int): How many batches before printing any messages if self.verbose
+        message_freq (int): How many batches before printing any messages if verbose
         force_add (bool): True if forcefully overwriting any Index with the same name
 
         Returns:
@@ -273,9 +241,9 @@ class SearchEngine():
         index_params["modality"] = dataset.modality
 
         post_processing = ""
-        if "binarized" in index_params and index_params["binarized"]:
-            warnings.warn("Index being built is binarized")
-            post_processing = "binarized"
+        if "post_processing" in index_params:
+            warnings.warn(f"Index being built is being post processed with {index_params['post_processing']}")
+            post_processing = index_params["post_processing"]
 
         index = Index(self, index_params)
 
@@ -283,9 +251,8 @@ class SearchEngine():
         if not os.path.exists(embedding_dir) and save_embeddings:
             os.makedirs(embedding_dir)
         
-        if self.verbose:
-            start_time = time.time()
-            print("Building {}, {} index".format(model.name, dataset.name))
+        start_time = time.time()
+        self.vprint("Building {}, {} index".format(model.name, dataset.name))
 
         num_batches = int(np.ceil(len(dataset) / batch_size))
         batch_magnitude = len(str(num_batches))
@@ -293,16 +260,15 @@ class SearchEngine():
         start_index = 0
         if load_embeddings:
             for batch_idx, embeddings in self.load_embeddings(embedding_dir, model, post_processing):
-                if self.verbose and not (batch_idx % message_freq):
-                    print("Loading batch {} of {}".format(batch_idx, num_batches))
+                if not (batch_idx % message_freq):
+                    self.vprint("Loading batch {} of {}".format(batch_idx, num_batches))
                 start_index = batch_idx + 1
                 index.add(embeddings)
 
         if start_index < num_batches:
-            print(start_index)
             for batch_idx, batch in dataset.get_data(batch_size, start_index = start_index):
-                if self.verbose and not (batch_idx % message_freq):
-                    print("Processing batch {} of {}".format(batch_idx, num_batches))
+                if not (batch_idx % message_freq):
+                    self.vprint("Processing batch {} of {}".format(batch_idx, num_batches))
 
                 embeddings = model.get_embedding(batch, dataset.modality)
                 if post_processing == "binarized":
@@ -313,30 +279,46 @@ class SearchEngine():
 
                 if save_embeddings:
                     filename = "batch_{}".format(str(batch_idx).zfill(batch_magnitude))
-                    self.save_batch(embeddings, filename, embedding_dir, post_processing = post_processing)
+                    save_batch(embeddings, filename, embedding_dir, post_processing = post_processing)
 
-        if self.verbose:
-            time_elapsed = time.time() - start_time
-            print("Finished building index {} in {} seconds.".format(index.name, round(time_elapsed, 4)))
+        time_elapsed = time.time() - start_time
+        self.vprint("Finished building index {} in {} seconds.".format(index.name, round(time_elapsed, 4)))
         
         self.indexes[index.name] = index
         self.modalities[index.modality]["index_names"].append(index.name)
 
         return index.name
             
-    def target_from_idx(self, indicies, dataset_name):
+    def idx_to_target(self, indicies, dataset_name):
         """Takes either an int or a list of ints and returns corresponding targets of dataset
 
         Parameters:
         indices (int or list of ints): Indices of interest
-        dataset_name (string or tuple): Name of dataset or index key to retrieve from
+        dataset_name (str): Name of dataset or index to retrieve from
 
         Returns:
         list: Targets corresponding to provided indicies in specified dataset
         """
-        dataset = self.datasets[dataset_name]
+        if dataset_name in self.datasets:
+            dataset = self.datasets[dataset_name]
+        elif dataset_name in self.indexes:
+            dataset = self.datasets[self.indexes[dataset_name].dataset_name]
+        else:
+            raise RuntimeError(f"'{dataset_name}' not found in self.datasets or self.indexes")
+
         return dataset.idx_to_target(indicies)
 
+    def target_to_tensor(self, target, dataset_name):
+        """
+        Convert a raw target data into a useable tensor as if it came from a given dataset
+
+        Parameters:
+        target (object): some target to to turn into a tensor
+        dataset_name (str): name of dataset that tensor should look like it came from
+        """
+        dataset = self.datasets[dataset_name]
+        return dataset.target_to_tensor(target)
+            
     def load_embeddings(self, embedding_dir, model, post_processing):
         """
         Loads previously saved embeddings from save_directory
@@ -350,62 +332,35 @@ class SearchEngine():
         int: Batch index
         arraylike: Embeddings received from passing data through model
         """
-        filenames = sorted([f for f in os.listdir(embedding_dir) if f[-3:] == "npy"])
+        filenames = sorted([f for f in os.listdir(embedding_dir) if f[-4:] == ".npy"])
         for batch_idx in range(len(filenames)):
-            embeddings = self.load_batch(filenames[batch_idx], embedding_dir, model.output_dim, post_processing=post_processing)
+            embeddings = load_batch(filenames[batch_idx], embedding_dir, model.output_dim, post_processing=post_processing)
             yield batch_idx, embeddings
-
-    def load_batch(self, filename, embedding_dir, dim, post_processing=""):
-        """
-        Load batch from a filename, does bit unpacking if embeddings are binarized
-        
-        Called by SearchEngine.load_embeddings()
-        
-        Parameters:
-        filename (string): Name of batch .npy file
-        embedding_dir (str): Path of the directory containing the embeddings
-        dim (tuple): The shape of each embedding should be
-        post_processing (str): "binarized" if embeddings are binarized
-        
-        Returns:
-        arraylike: loaded batch
-        """
-        path = os.path.normpath(f"{embedding_dir}/{filename}")
-        if post_processing == "binarized":
-            #TODO: confirm this works
-            batch = np.array(np.unpackbits(np.load(path)), dtype="float32")
-            rows = len(batch) // dim
-            batch = batch.reshape(rows, dim)
-        else:
-            batch = np.load(path).astype("float32")
-
-        if tuple(batch.shape[-len(dim):]) != tuple(dim):
-            warnings.warn(f"Loaded batch has dimension {batch.shape[-len(dim):]} but was expected to be {dim}")
-
-        return batch
-
-    def save_batch(self, embeddings, filename, embedding_dir, post_processing = ""):
-        """
-        Saves batch into a filename into .npy file
-
-        Does bitpacking if batches are binarized to drastically reduce size of files
-        
-        Parameters:
-        embeddings (arraylike): The batch of embeddings to be saved
-        filename (string): Name of batch .npy file
-        embedding_dir (str): Path of the directory containing the embeddings
-        post_processing (str): "binarized" if embeddings are binarized
-        
-        Returns:
-        None
-        """
-        path = "{}/{}.npy".format(embedding_dir, filename)
-        if post_processing == "binarized":
-            #TODO: Confirm this works
-            np.save(path, np.packbits(embeddings.astype(bool)))
-        else:
-            np.save(path, embeddings.astype('float32'))
      
+    def save(self, shallow = False, save_data = False):
+        info = {
+            "name": self.name,
+            "cuda": self.cuda,
+            "verbose": self.verbose,
+            "dataset_dir": self.dataset_dir,
+            "index_dir": self.index_dir,
+            "model_dir": self.model_dir,
+            "embedding_dir": self.embedding_dir,
+            "modality_dicts": self.modalities,
+            "modalities": list(self.modalities.keys())
+        }
+
+        if not shallow:
+            for _, dataset in self.datasets.items():
+                dataset.save(save_data = save_data)
+            for _, index in self.indexes.items():
+                index.save()
+            for _, model in self.models.items():
+                model.save()
+
+        with open(f"{self.name}.engine", "w+") as f:
+            f.write(json.dumps(info))
+    
     def __repr__(self):
         """Representation of SearchEngine object, quick summary of assets"""
         return "SearchEngine<" + \
@@ -419,14 +374,6 @@ class SearchEngine():
         """String representation of SearchEngine object, uses __repr__"""
         return self.__repr__()
 
-    def target_to_tensor(self, target, dataset_name):
-        """
-        Convert a raw target data into a useable tensor as if it came from a given dataset
-
-        Parameters:
-        target (object): some target to to turn into a tensor
-        dataset_name (str): name of dataset that tensor should look like it came from
-        """
-        dataset = self.datasets[dataset_name]
-        return dataset.target_to_tensor(target)
-            
+    def vprint(self, *args, **kwargs):
+        if self.verbose:
+            print(*args, **kwargs)
