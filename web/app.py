@@ -4,14 +4,12 @@ import requests
 import os
 import json
 
-from dime.utils import allowed_file
-
 app = Flask(__name__)
 
 ALLOWED_EXTENSIONS = {
     "image": set(['jpg', 'jpeg',])
 }
-ENGINE_URL = "http://3.212.166.121"
+SERVER_URL = "http://0.0.0.0:5000"
 
 def make_request(request, modality):
     data = {}
@@ -21,7 +19,7 @@ def make_request(request, modality):
     else:
         data["num_results"] = 30
 
-    query_url = f"{ENGINE_URL}/query/"
+    query_url = f"{SERVER_URL}/query/"
 
     if "text" == modality:
         query_input = request.values["text"]
@@ -30,9 +28,9 @@ def make_request(request, modality):
     elif "image" == modality:
         if "file" in request.files:
             f = request.files["file"]
-            if f.filename and allowed_file(f.filename.strip(), ALLOWED_EXTENSIONS["image"]):
+            if f.filename: #and allowed_file(f.filename.strip(), ALLOWED_EXTENSIONS["image"]):
                 filename = secure_filename(f.filename.strip())
-                query_input = ENGINE_URL + "/uploads/" + filename
+                query_input = SERVER_URL + "/uploads/" + filename
                 files = {"file": (filename, f)}
                 r = requests.post(query_url, files = files, data = data)
             else:
@@ -59,9 +57,9 @@ def make_request(request, modality):
 
 @app.route("/")
 def home():
-    data = {
-        "engine_url": ENGINE_URL
-    }
+    print("\n\nHome page request")
+    info = requests.get(f"{SERVER_URL}/info", data = {"supported_modalities": True}).json()
+    data = {"supported_modalities" : info["supported_modalities"]}
     return render_template("home.html", data = data)
 
 @app.route("/query/<modality>", methods=["GET", "POST"])
@@ -70,7 +68,7 @@ def query(modality):
         try:
             response, query_input = make_request(request, modality)
             data = {
-                "engine_url": ENGINE_URL,
+                "engine_url": SERVER_URL,
                 "input_modality": response["input_modality"],
                 "valid_indexes": response["valid_indexes"],
                 "num_results": response["num_results"],
@@ -89,8 +87,10 @@ def query(modality):
 
 if __name__ == "__main__":
     print("ALLOWED_EXTENSIONS: ", ALLOWED_EXTENSIONS)
-    print("ENGINE_URL: ", ENGINE_URL)
+    print("SERVER_URL: ", SERVER_URL)
+    code = requests.get(f"{SERVER_URL}/info", data={"alive":True}).status_code
+    print(f"Server responded with status code: {code}")
     app.run(
         host=os.getenv("LISTEN", "0.0.0.0"),
-        port=int(os.getenv("PORT", "80"))
+        port=int(os.getenv("PORT", "5001"))
     )

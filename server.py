@@ -46,6 +46,7 @@ def handle_search(request, engine):
 
     print("Index:", index.name)
 
+    # Process target and convert to tensor
     if "text" == modality:
         tensor = engine.target_to_tensor(target, modality = modality)
     elif "image" == modality:
@@ -90,7 +91,7 @@ def handle_upload(filename):
 def handle_data(filename):
     return send_from_directory(engine.dataset_dir, filename, as_attachment=True)
 
-@server.route("/info/")
+@server.route("/info")
 def handle_info():
     info = {}
     # Available
@@ -124,10 +125,12 @@ def handle_info():
     # Misc
     if in_and_true("supported_modalities", request.values):
         info["supported_modalities"] = list(engine.modalities.keys())
+    if in_and_true("alive", request.values):
+        info["alive"] = True
     
     return jsonify(sanitize_dict(info))
 
-@server.route("/query/", methods=["POST"])
+@server.route("/query", methods=["POST"])
 def handle_query():
     """
     Returns page of results based on request
@@ -139,7 +142,7 @@ def handle_query():
     }
     """
     print("\n\nRECEIVED QUERY")
-    if in_and_true("target", request) and in_and_true("modality", request):
+    if in_and_true("target", request.values) and in_and_true("modality", request.values):
         response = {
             "initial_target": request.values["target"],
             "initial_modality": request.values["modality"],
