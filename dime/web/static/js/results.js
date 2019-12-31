@@ -291,6 +291,7 @@ class ResultsBody extends React.Component {
     )
   }
 }
+
 class Results extends React.Component{
   constructor(props) {
     super(props);
@@ -319,6 +320,7 @@ class Results extends React.Component{
     )
   }
 }
+
 class Content extends React.Component {
   constructor(props) {
     super(props);

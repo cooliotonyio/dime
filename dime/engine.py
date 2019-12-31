@@ -2,6 +2,7 @@ import numpy as np
 import os
 import time
 import json
+import random
 from sklearn.preprocessing import binarize
 import warnings
 
@@ -324,14 +325,20 @@ class SearchEngine():
 
         return dataset.idx_to_target(indicies)
 
-    def target_to_tensor(self, target, dataset_name):
+    def target_to_tensor(self, target, dataset_name = None, modality = None):
         """
         Convert a raw target data into a useable tensor as if it came from a given dataset
+
+        Uses the first dataset of a modality if modality is specified instead of dataset_name
 
         Parameters:
         target (object): some target to to turn into a tensor
         dataset_name (str): name of dataset that tensor should look like it came from
         """
+        if modality is not None:
+            dataset_name = self.modalities[modality]["dataset_names"][0]
+        elif dataset_name is None:
+            raise RuntimeError("dataset_name or modality was not specified in target_to_tensor")
         dataset = self.datasets[dataset_name]
         return dataset.target_to_tensor(target)
             

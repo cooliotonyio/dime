@@ -89,12 +89,17 @@ def in_and_true(k, d):
 
 def sanitize_dict(d):
     """Returns a copy of a JSON-safe version of a dictionary"""
+
     primitives = (str, dict, list, int, float, bool)
     keys = list(d.keys())
     safe_d = {}
     for k in keys:
         if type(d[k]) not in primitives:
             safe_d[k] = str(d[k])
+        elif type(d[k]) == dict:
+            safe_d[k] = sanitize_dict(d)
+        elif type(d[k]) == list:
+            safe_d[k] = [str(v) for v in d[k]]
         else:
             safe_d[k] = d[k]
     return safe_d

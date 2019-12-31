@@ -21,7 +21,7 @@ def make_request(request, modality):
     else:
         data["num_results"] = 30
 
-    query_url = ENGINE_URL + "/query/" + modality
+    query_url = f"{ENGINE_URL}/query/"
 
     if "text" == modality:
         query_input = request.values["text"]
@@ -45,20 +45,8 @@ def make_request(request, modality):
             "dataset": request.values["dataset"],
             "target": request.values["target"],
             "model": request.values["model"],
-            "binarized": request.values["binarized"],
+            "post_processing": request.values["post_processing"],
             "num_results": request.values["num_results"]
-        }
-        r = requests.post(query_url, data = data)
-    elif "prev_query" == modality:
-        query_input = request.values["query_input"].split("/")[-1]
-        print(query_input)
-        dataset = request.values["dataset"]
-        model = request.values["model"]
-        binarized =request.values["binarized"]
-        data = {
-            "query_input": query_input,
-            "index_key": str([dataset, model, binarized]),
-            "modality": request.values["modality"]
         }
         r = requests.post(query_url, data = data)
     else:
@@ -71,7 +59,10 @@ def make_request(request, modality):
 
 @app.route("/")
 def home():
-    return render_template("home.html")
+    data = {
+        "engine_url": ENGINE_URL
+    }
+    return render_template("home.html", data = data)
 
 @app.route("/query/<modality>", methods=["GET", "POST"])
 def query(modality):
