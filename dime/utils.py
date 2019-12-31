@@ -76,3 +76,26 @@ def save_batch(embeddings, filename, embedding_dir, post_processing = ""):
         np.save(path, np.packbits(embeddings.astype(bool)))
     else:
         np.save(path, embeddings.astype('float32'))
+
+def allowed_file(filename, extensions):
+    """Returns true if filename extension is in extensions, otherwise raise RuntimeError"""
+    if "." in filename and filename.rsplit(".", 1)[-1].lower() in extensions:
+        return True
+    raise RuntimeError(f"Filename '{filename}' not allowed with allowed extensions '{extensions}'")
+
+def in_and_true(k, d):
+    """Returns true if key is in dictionary AND corresponding value evaluates to True"""
+    return k in d and d[k]
+
+def sanitize_dict(d):
+    """Returns a copy of a JSON-safe version of a dictionary"""
+    primitives = (str, dict, list, int, float, bool)
+    keys = list(d.keys())
+    safe_d = {}
+    for k in keys:
+        if type(d[k]) not in primitives:
+            safe_d[k] = str(d[k])
+        else:
+            safe_d[k] = d[k]
+    return safe_d
+

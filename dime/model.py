@@ -28,6 +28,7 @@ class Model():
             "modalities":       (list) A list of modalities the model supports
             "embedding_nets":   (list) A list of callables corresponding to each modality
             "input_dim":        (list) A list of tuples corresponding to each modality
+            "preprocessors:     (list) A list of either strings or callables corresponding to each modality
             "desc":             (str) A description
         }
         """
@@ -42,7 +43,10 @@ class Model():
         self.cuda = engine.cuda
         self.desc = model_params["desc"] if "desc" in model_params else model_params["name"]
 
-        self.preprocessors = [None for _ in range(len(self.modalities))]
+        if "preprocessors" in model_params:
+            self.preprocessors = model_params["preprocessors"]
+        else:
+            self.preprocessors = [None for _ in range(len(self.modalities))]
 
         assert len(self.modalities) == len(self.embedding_nets) == len(self.input_dim), \
             f"Unexpected number of modalities/embedding_nets/input_dim ({len(self.modalities)}/{len(self.embedding_nets)}/{len(self.input_dim)})"
@@ -125,6 +129,7 @@ class Model():
             "output_dim": self.output_dim,
             "desc": self.desc
         }
+        info["preprocessors"] = [p if type(p) == str else None for p in self.preprocessors]
         model_dir = os.path.normpath(f"{self.engine.model_dir}/{self.name}/")
         embedding_net_dir = os.path.normpath(f"{model_dir}/embedding_nets/")
         if not os.path.isdir(embedding_net_dir):

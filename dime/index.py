@@ -49,6 +49,7 @@ class Index():
         self.dim = tuple(self.engine.models[self.model_name].output_dim)
         assert len(self.dim) == 1, "FAISS search only supports 1 dimensional vectors"
         self.index = faiss.IndexFlatL2(self.dim[0])
+        self.input_modalities = list(self.engine.models[self.model_name].modalities.keys())
     
     def add(self, embeddings):
         """Add embeddings to index"""

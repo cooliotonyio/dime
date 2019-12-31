@@ -87,7 +87,7 @@ class SearchEngine():
                     self.modalities[index.modality]["index_names"].append(index.name)
                     self.vprint(f"done in {round(time.time() - start_time, 4)} seconds!")
 
-    def valid_index_names(self, tensor, modality):
+    def valid_index_names(self, modality, tensor = None):
         """
         Returns a list of names of all indexes that are valid given a tensor and modality
 
@@ -98,8 +98,12 @@ class SearchEngine():
         Returns:
         list of tuples: Keys of valid indexes
         """
-        valid_model_names = [m.name for m in list(self.models.values()) if m.can_call(modality, tensor.shape)]
-        return [i.name for i in list(self.indexes.values()) if i.model_name in valid_model_names]
+        if tensor is not None:
+            valid_model_names = [m.name for m in list(self.models.values()) if m.can_call(modality, tensor.shape)]
+            valid = [i.name for i in list(self.indexes.values()) if i.model_name in valid_model_names]
+        else:
+            valid = [i.name for i in list(self.indexes.values()) if modality in i.input_modalities]
+        return valid
 
     def buildable_indexes(self):
         """Returns (model, dataset) pairs that are compatible"""
@@ -133,15 +137,27 @@ class SearchEngine():
         model = self.models[index.model_name]
         assert tensor_modality in model.modalities, f"Model '{model.name}' does not support modality '{tensor_modality}'"
 
-        model_dim = model.input_dim[model.modalities[tensor_modality]]
-        if tuple(tensor.shape) == model_dim:
-            batch = tensor[None,:]
-            is_single_vector = True
-        elif len(tensor.shape) == (len(model_dim) + 1) and tuple(tensor.shape)[-len(model_dim)] == model_dim:
-            is_single_vector = False
-        else:
-            raise RuntimeError(f"Provided tensor of shape '{tensor.shape}' " + \
-                f"not compatible with index model '{model.name}' of shape {model_dim}")
+        m = model
+        t_shape = tuple(tensor.shape)
+        while m:
+            m_dim = tuple(m.input_dim[m.modalities[tensor_modality]])
+            preprocessor = m.preprocessors[m.modalities[tensor_modality]]
+            if t_shape == m_dim:
+                batch = tensor[None,:]
+                is_single_vector = True
+                break
+            elif len(t_shape) == (len(m_dim) + 1) and t_shape[-len(m_dim)] == m_dim:
+                is_single_vector = False
+                break
+            elif preprocessing and preprocessor:
+                if type(preprocessor) == str:
+                    m = self.models[preprocessor]
+                    continue
+                else:
+                    break
+            else:
+                print(t_shape, m_dim)
+                raise RuntimeError(f"Provided tensor of shape '{t_shape}' not compatible with index model '{model.name}'")
 
         embeddings = self.get_embedding(model.name, batch, tensor_modality, preprocessing = preprocessing)
         if index.post_processing == "binarized":

@@ -4,9 +4,13 @@ import requests
 import os
 import json
 
+from dime.utils import allowed_file
+
 app = Flask(__name__)
 
-ALLOWED_EXTENSIONS = set(['jpg', 'jpeg',])
+ALLOWED_EXTENSIONS = {
+    "image": set(['jpg', 'jpeg',])
+}
 ENGINE_URL = "http://3.212.166.121"
 
 def make_request(request, modality):
@@ -26,7 +30,7 @@ def make_request(request, modality):
     elif "image" == modality:
         if "file" in request.files:
             f = request.files["file"]
-            if f.filename and allowed_file(f.filename.strip()):
+            if f.filename and allowed_file(f.filename.strip(), ALLOWED_EXTENSIONS["image"]):
                 filename = secure_filename(f.filename.strip())
                 query_input = ENGINE_URL + "/uploads/" + filename
                 files = {"file": (filename, f)}
@@ -64,10 +68,6 @@ def make_request(request, modality):
         return r.json(), query_input
     except:
         raise RuntimeError("Error decoding response from server: {}".format(r.content.decode()))
-
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[-1].lower() in ALLOWED_EXTENSIONS   
 
 @app.route("/")
 def home():
