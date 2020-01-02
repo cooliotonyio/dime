@@ -44,14 +44,24 @@ class SearchEntry extends React.Component {
   constructor(props) {
     super(props);
     this.get_input = this.get_input.bind(this);
+    this.text_change = this.text_change.bind(this);
+    this.file_change = this.file_change.bind(this);
+  }
+
+  text_change(event){
+    this.props.set_text(event.target.value);
+  }
+
+  file_change(event) {
+    this.props.set_file(event.target.files[0]);
   }
 
   get_input() {
     var input;
     if (this.props.selected_modality == "text"){
-      input = (<input className="form-control" type="text" placeholder="Enter text"/>);
+      input = (<input className="form-control" type="text" placeholder="Enter text" onChange={this.text_change}/>);
     } else {
-      input = (<input type="file" className="form-control-file"/>);
+      input = (<input type="file" className="form-control-file" onChange={this.file_change}/>);
     }
     return input;
   }
@@ -140,31 +150,25 @@ class AvailableIndexes extends React.Component{
   }
 }
 
-class SubmitSearch extends React.Component {
-  constructor(props) {
-    super(props);
-  }
-
-  render() {
-    if (this.props.selected_index !== null) {
-      return (<button className="btn btn-success">Search</button>);
-    } else {
-      return (<button className="btn btn-secondary disabled">Search</button>);
-    }
-  }
-}
-
 class Search extends React.Component {
   constructor(props) {
     super(props);
+
     this.handle_modality_change = this.handle_modality_change.bind(this);
     this.handle_selected_index_change = this.handle_selected_index_change.bind(this);
+    this.handle_submit = this.handle_submit.bind(this);
+    this.get_submit_button = this.get_submit_button.bind(this);
+    this.set_file = this.set_file.bind(this);
+    this.set_text = this.set_text.bind(this);
+
     let data = JSON.parse(this.props.data);
     this.state = {
       supported_modalities: data.supported_modalities,
       selected_modality: data.supported_modalities[0],
       server_url: data.server_url,
       selected_index: null,
+      file: null,
+      text: null,
     };
   }
 
@@ -178,6 +182,47 @@ class Search extends React.Component {
     this.setState({selected_index: index_name});
   }
 
+  get_submit_button() {
+    const active_button = (<button className="btn btn-success" onClick={this.handle_submit}>Search</button>);
+    const disabled_button= (<button className="btn btn-secondary disabled">Search</button>);
+    if (this.state.selected_index !== null) {
+      if ("text" === this.state.selected_modality) {
+        if (this.state.text !== null) {return active_button;}
+      }
+      if ("image" === this.state.selected_modality) {
+        if (this.state.file !== null) {return active_button;}
+      }
+      if ("audio" === this.state.selected_modality) {
+        if (this.state.file !== null) {return active_button;}
+      }
+      if ("video" === this.state.selected_modality) {
+        if (this.state.file !== null) {return active_button;}
+      }
+    }
+    return (<button className="btn btn-secondary disabled">Search</button>);
+  }
+
+  handle_submit() {
+    console.log("SUBMITTED!!!!");
+    console.log(this.state)
+  }
+
+  set_file(new_file) {
+    // TODO: Check if file is valid
+    this.setState({
+      text: null,
+      file: new_file
+    });
+  }
+
+  set_text(new_text) {
+    //TODO: Check if text is valid
+    this.setState({
+      text: new_text,
+      file: null
+    });
+  }
+
   render() {
     return (
       <div className="row justify-content-center w-100 pt-5">
@@ -189,14 +234,14 @@ class Search extends React.Component {
             handle_modality_change={this.handle_modality_change}/>
           <SearchEntry
             selected_modality={this.state.selected_modality}
-          />
+            set_file={this.set_file}
+            set_text={this.set_text}/>
           <AvailableIndexes 
             server_url={this.state.server_url}
             selected_modality={this.state.selected_modality}
             selected_index={this.state.selected_index}
             handle_selected_index_change={this.handle_selected_index_change}/>
-          <SubmitSearch
-            selected_index={this.state.selected_index}/>
+          {this.get_submit_button()}
         </div>
       </div> 
     )

@@ -83,7 +83,7 @@ def query(modality):
             print(err)
             return render_template("error.html", error = str(err))
     elif request.method == "GET":
-        return home()
+        return index()
     else:
         error = "Method '{}' not supported".format(request.method)
         return render_template("error.html", error = error)
