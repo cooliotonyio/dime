@@ -39,12 +39,13 @@ def handle_search(request, engine):
         num_results = int(request.values["num_results"])
     else:
         num_results = 30
-
-    if "index_name" in request.values:
-        index = engine.indexes[request.values["index_name"]]
+    
+    if "index_name" not in request.values:
+        print("Index name not provided, selecting first text index for tags")
+        index_name = engine.modalities["text"]["index_names"][0]
+        index = engine.indexes[index_name]
     else:
-        #TODO: get a random compatible index
-        pass
+        index = engine.indexes[request.values["index_name"]]
 
     print("Index:", index.name)
 
@@ -52,14 +53,7 @@ def handle_search(request, engine):
     if "text" == modality:
         tensor = engine.target_to_tensor(target, modality = modality)
     elif "image" == modality:
-        if "file" in request.files:
-            f = request.files["file"]
-            if f.filename and allowed_file(f.filename, ALLOWED_EXTENSIONS[modality]):
-                target = os.path.join(UPLOAD_DIR, secure_filename(f.filename))
-                tensor = engine.target_to_tensor(target, modality = modality)
-                f.save(target)
-        else:
-            raise RuntimeError("No file attached to request")
+        tensor = engine.target_to_tensor(target, modality = modality)
     elif "dataset" == modality:
         dataset = engine.datasets[request.values["dataset_name"]]
         modality = dataset.modality
@@ -86,12 +80,42 @@ def handle_search(request, engine):
     return results
             
 @server.route("/uploads/<path:filename>")
-def handle_upload(filename):
+def get_upload(filename):
     return send_from_directory(UPLOAD_DIR, filename, as_attachment=True)
 
 @server.route("/data/<path:filename>")
-def handle_data(filename):
+def get_data(filename):
     return send_from_directory(engine.dataset_dir, filename, as_attachment=True)
+
+@server.route("/file_upload/", methods=["POST"])
+def handle_upload():
+    print("\n\nRECEIVED UPLOAD")
+    response = {"error":"An unknown error occurred"}
+    try:
+        if "modality" in request.values:
+            modality = request.values["modality"]
+            print(f"File upload modality: {modality}")
+            if "image" == modality:
+                if "file" in request.files:
+                    f = request.files["file"]
+                    if f.filename and allowed_file(f.filename, ALLOWED_EXTENSIONS[modality]):
+                        target = os.path.join(UPLOAD_DIR, secure_filename(f.filename))
+                        f.save(target)
+                        response["target"] = target
+                        response["error"] = False
+                        print(f"Saved '{target}'")
+                    else:
+                        response["error"] = f"Filename '{f.filename}' not allowed"
+                else:
+                    response["error"] = "No 'file' attached to request.files"
+            else:
+                response["error"] = f"Modality '{modality}' not supported by file_upload"
+        else:
+            response["error"] = "No modality specified"
+    except Exception as e:
+        response["error"] = e.__repr__()
+    finally:
+        return jsonify(sanitize_dict(response))
 
 @server.route("/info")
 def handle_info():
@@ -140,6 +164,7 @@ def handle_query():
     request.values = {
         "modality",
         "target",
+        "index_name",
         "num_results",
     }
     """
@@ -158,6 +183,8 @@ def handle_query():
         return "Request missing either 'target' or 'modality'", 400
 
 if __name__ == "__main__":
+    if not os.path.isdir(UPLOAD_DIR):
+        os.makedirs(UPLOAD_DIR)
     server.run(
         host=os.getenv("LISTEN", "0.0.0.0"),
         port=int(os.getenv("PORT", "5000"))

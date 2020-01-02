@@ -203,8 +203,36 @@ class Search extends React.Component {
   }
 
   handle_submit() {
-    console.log("SUBMITTED!!!!");
-    console.log(this.state)
+    console.log(this.state);
+    const data = {
+      index_name: this.state.selected_index,
+      modality: this.state.selected_modality,
+      num_results: "30"
+    }
+    if ("text" == this.state.selected_modality) {
+      data.target = this.state.text;
+      this.handle_query_redirect(data);
+    } else {
+      let form_data = new FormData();
+      form_data.append('modality', this.state.selected_modality);
+      form_data.append('file', this.state.file);
+      fetch(this.state.server_url + "/file_upload", {
+        method: 'POST',
+        body: form_data})
+        .then(r => r.json())
+        .then((result) => {
+          if (!result.error) {
+            data.target = result.target;
+            this.handle_query_redirect(data);
+          } else {
+            console.log(result.error);
+          }
+        });
+    }
+  }
+
+  handle_query_redirect(data) {
+    window.location.href = window.location.origin + "/query?" + $.param(data)
   }
 
   set_file(new_file) {

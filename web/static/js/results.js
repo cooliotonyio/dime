@@ -141,26 +141,46 @@ class Header extends React.Component {
     super(props);
     this.create_query_input = this.create_query_input.bind(this);
     this.create_tags = this.create_tags.bind(this);
+    this.set_tags = this.set_tags.bind(this);
+    this.state = {
+      tags: ["Loading tags..."]
+    }
+  }
+
+  set_tags() {
+    let form_data = new FormData();
+    form_data.append("modality", this.props.modality)
+    form_data.append("target", this.props.target)
+    form_data.append("num_results", "30")
+    fetch(this.props.server_url + "/query", {
+      method: "POST",
+      body: form_data})
+      .then(r => r.json())
+      .then((response) => {
+        this.setState({
+          tags: response.results.results
+        });
+      })
+  }
+
+  componentDidMount() {
+    this.set_tags();
   }
 
   create_query_input() {
-    switch(this.props.data.input_modality) {
+    switch(this.props.modality) {
       case "text":
-        return this.props.data.query_input;
+        return this.props.target;
       case "image":
-        return <img height='100' src={this.props.data.query_input}/>;
+        return <img height='100' src={this.props.server_url+"/"+this.props.target}/>;
     }  
   }
 
   create_tags() {
+    console.log(this.state)
     var tags = "";
-    for (var i = 0; i < this.props.data.results.length; i++) {
-      var result = this.props.data.results[i];
-      if (result.modality == "text") {
-        for (var j = 0; j < result.num_results; j++) {
-          tags = tags + result.data[j] + ", ";
-        }
-      }
+    for (var i = 0; i < this.state.tags.length; i++) {
+      tags = tags + this.state.tags[i] + ", ";
     }
     return tags;
   }
@@ -175,7 +195,7 @@ class Header extends React.Component {
         </div>
         <div className="row justify-content-center">
           <div className="col-1 text-center">
-            <h4>Modality:</h4> {this.props.data.input_modality}<br/>
+            <h4>Modality:</h4> {this.props.modality}<br/>
             <a className="btn btn-primary pt-3" role="button" href="/">Search Another</a>
           </div>
           <div className="col-4 text-center">
@@ -324,13 +344,36 @@ class Results extends React.Component{
 class Content extends React.Component {
   constructor(props) {
     super(props);
+    const data = JSON.parse(this.props.data);
     this.state = {
-      data: JSON.parse(this.props.data),
       modal: null,
-      show: false
+      show: false,
+      server_url: data.server_url,
+      target: data.target,
+      modality: data.modality,
     };
     this.showModal = this.showModal.bind(this);
     this.hideModal = this.hideModal.bind(this);
+    this.get_results = this.get_results.bind(this);
+  }
+
+  get_results(data) {
+    let form_data = new FormData();
+    form_data.append("modality", data.modality)
+    form_data.append("target", data.target)
+    form_data.append("index_name", data.index_name)
+    form_data.append("num_results", data.num_results)
+    fetch(data.server_url + "/query", {
+      method: "POST",
+      body: form_data})
+      .then(r => r.json())
+      .then((response) => {
+        this.setState({
+          target: response.results.target,
+          modality: response.results.modality,
+          num_results: response.results.results.length
+        });
+      })
   }
 
   showModal(data){
@@ -348,16 +391,15 @@ class Content extends React.Component {
     return (
       <div>
         <Header 
-          data={this.state.data}/>
-        <Results 
-          data={this.state.data} 
-          num_results={this.state.data.num_results}
+          target={this.state.target}
+          modality={this.state.modality}
+          server_url={this.state.server_url}/>
+        {/* <Results 
+          data={this.state} 
           clickHandler={this.showModal}/>
         <Modal 
-          show={this.state.show} 
-          data={this.state.modal} 
-          num_results={this.state.data.num_results}
-          clickHandler={this.hideModal}/>
+          data={this.state} 
+          clickHandler={this.hideModal}/> */}
       </div>
     )
   }
