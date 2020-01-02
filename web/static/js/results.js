@@ -9,7 +9,6 @@ class Image extends React.Component {
           src={this.props.source}
           onClick ={(event) => this.props.clickHandler(this.props)}>
         </img>
-        {/* <p>Distance = {this.props.distance}</p> */}
       </div>
     )
   }
@@ -216,39 +215,69 @@ class ResultsHeader extends React.Component {
     super(props);
     this.createTabs = this.createTabs.bind(this);
     this.createGraph = this.createGraph.bind(this);
+    this.handle_tab_press = this.handle_tab_press.bind(this);
+
+    this.state = {
+      available_indexes: null,
+    }
   }
 
-  createGraph(dataset) {
-    return <LineGraph label={dataset.dataset} data={dataset.dis}/>
+  createGraph(results) {
+    return <LineGraph label={results.dataset_name} data={results.dis}/>
+  }
+
+  componentDidMount(){
+    const data = {available_indexes: this.props.results.modality};
+    const url = this.props.server_url + "/info?" + $.param(data);
+    fetch(url)
+      .then(result => result.json())
+      .then(
+        (result) => {
+          console.log(result)
+          this.setState({available_indexes: result.available_indexes})},
+        (error) => {
+          console.log(error);
+          this.setState({available_indexes: []});
+        }
+      );
+  }
+
+  handle_tab_press(index_name) {
+    const data = {
+      target: this.props.results.target,
+      modality: this.props.results.modality,
+      num_results: this.props.results.num_results,
+      index_name: index_name,
+    }
+    window.location.href = window.location.origin + "/query?" + $.param(data);
   }
 
   createTabs() {
-    let tabs = [];
-    for (var i = 0; i < this.props.datasets.length; i++){
-      let dataset = this.props.datasets[i];
-      if (dataset[3] != "text"){
-        if (dataset[0] === this.props.currentDataset.dataset && dataset[1] === this.props.currentDataset.model) {
-          var button_class = "btn btn-primary";
-        } else {
-          var button_class = "btn btn-secondary";
-        } 
-        tabs.push(
-          <form action="/query/prev_query" method="POST" key = {i}>
-            <div className="form-group d-none">
-              <input name="query_input" type="text" value={this.props.query_input} readOnly/>
-              <input name="dataset"  type="text" value={dataset[0]} readOnly/>
-              <input name="model"  type="text" value={dataset[1]} readOnly/>
-              <input name="binarized" type="text" value={dataset[2]} readOnly/>
-              <input name="modality" type="text" value={this.props.input_modality} readOnly/>
-              <input name="num_results" type="text" value={this.props.num_results} readOnly/>
-            </div>
+    console.log(this.state)
+    var tabs = []
+    if (this.state.available_indexes !== null) {
+      for (let [i, index_name] of this.state.available_indexes.entries()) {
+        if (index_name === this.props.results.index_name){
+          tabs.push(
             <button 
-              type="submit" 
-              className={button_class}>
-              {dataset[0]} with {dataset[1]}
-            </button>
-          </form>);
+              key={i}
+              type="button"
+              className="btn btn-primary disabled">
+              {index_name}
+            </button>)
+        } else {
+          tabs.push(
+            <button 
+              key={i}
+              type="button"
+              className="btn btn-secondary"
+              onClick={(e) => this.handle_tab_press(index_name)}>
+              {index_name}
+            </button>)
+        }
       }
+    } else {
+      tabs = (<div>Loading indexes...</div>)
     }
     return tabs
   }
@@ -256,15 +285,19 @@ class ResultsHeader extends React.Component {
   render() {
     return (
       <div id="resultsHeader">
+        <div className="row pt-5">
+          <div className="col text-center">
+            <h1>Results:</h1>
+          </div>
+        </div>
         <div className="row justify-content-center">
-        <div className="col-4 pt-5 text-center">
-          <h1>Results:</h1>
+        <div className="col-5 text-center">
           <div className="btn-group" role="group" aria-label="Basic example">
             {this.createTabs()}
           </div>
         </div>
-        <div className="col-6 pt-5">
-          {this.createGraph(this.props.currentDataset)}
+        <div className="col-5">
+          {this.createGraph(this.props.results)}
         </div>
       </div>
     </div>
@@ -277,7 +310,6 @@ class ResultsBody extends React.Component {
   constructor(props) {
     super(props);
     this.createResults = this.createResults.bind(this);
-    console.log(this.props.results)
   }
 
   createResults(){
@@ -286,6 +318,7 @@ class ResultsBody extends React.Component {
       for (let [i, result] of this.props.results.results.entries()){
         results.push(
           <Image
+            key={i}
             source={this.props.server_url + "/" + result}
             clickHandler={this.props.clickHandler}/>
           )
@@ -298,7 +331,6 @@ class ResultsBody extends React.Component {
           </div>)
       }
     }
-    console.log(results)
     return results
   }
 
@@ -321,11 +353,9 @@ class Results extends React.Component{
   render() {
     return (
       <div id="results">
-        {/* <ResultsHeader 
-          datasets = {this.props.data.valid_indexes} 
-          currentDataset = {this.state.dataset}
-          query_input = {this.props.data.query_input}
-          input_modality = {this.props.data.input_modality}/> */}
+        <ResultsHeader 
+          results = {this.props.results}
+          server_url = {this.props.server_url}/>
         <ResultsBody 
           results = {this.props.results}
           server_url = {this.props.server_url}

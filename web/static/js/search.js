@@ -199,7 +199,7 @@ class Search extends React.Component {
         if (this.state.file !== null) {return active_button;}
       }
     }
-    return (<button className="btn btn-secondary disabled">Search</button>);
+    return disabled_button;
   }
 
   handle_submit() {
