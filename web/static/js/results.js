@@ -177,7 +177,6 @@ class Header extends React.Component {
   }
 
   create_tags() {
-    console.log(this.state)
     var tags = "";
     for (var i = 0; i < this.state.tags.length; i++) {
       tags = tags + this.state.tags[i] + ", ";
@@ -278,26 +277,28 @@ class ResultsBody extends React.Component {
   constructor(props) {
     super(props);
     this.createResults = this.createResults.bind(this);
+    console.log(this.props.results)
   }
 
   createResults(){
-    var dataset = this.props.dataset;
-    let results = [];
-    for (var i = 0; i < dataset.num_results; i++){
-      results.push(
-        <Image 
-          key={i}
-          source={this.props.url + "/" + dataset.data[i]}
-          distance={dataset.dis[i]}
-          idx={dataset.idx[i]}
-          dataset={dataset.dataset}
-          model={dataset.model}
-          binarized={dataset.is_binarized}
-          model_info={dataset.model_info}
-          clickHandler={this.props.clickHandler}>
-        </Image>
-      );        
+    var results = []
+    if ("image" === this.props.results.index_modality) {
+      for (let [i, result] of this.props.results.results.entries()){
+        results.push(
+          <Image
+            source={this.props.server_url + "/" + result}
+            clickHandler={this.props.clickHandler}/>
+          )
+      }
+    } else if ("text" === this.props.results.index_modality) {
+      for (let [i, result] of this.props.results.results.entries()){
+        results.push(
+          <div className="col-2" key={i}>
+            <h4>{i+1}. {result}</h4>
+          </div>)
+      }
     }
+    console.log(results)
     return results
   }
 
@@ -315,26 +316,19 @@ class ResultsBody extends React.Component {
 class Results extends React.Component{
   constructor(props) {
     super(props);
-    for (var i = 0; i < this.props.data.results.length; i++) {
-      var dataset = this.props.data.results[i];
-      if (dataset.modality == "image") {
-        this.state = {"dataset": dataset};
-        break;
-      }
-    }
   }
 
   render() {
     return (
       <div id="results">
-        <ResultsHeader 
+        {/* <ResultsHeader 
           datasets = {this.props.data.valid_indexes} 
           currentDataset = {this.state.dataset}
           query_input = {this.props.data.query_input}
-          input_modality = {this.props.data.input_modality}/>
+          input_modality = {this.props.data.input_modality}/> */}
         <ResultsBody 
-          dataset = {this.state.dataset}
-          url = {this.props.data.engine_url}
+          results = {this.props.results}
+          server_url = {this.props.server_url}
           clickHandler = {this.props.clickHandler}/>
       </div>
     )
@@ -351,10 +345,27 @@ class Content extends React.Component {
       server_url: data.server_url,
       target: data.target,
       modality: data.modality,
+      results: null,
     };
     this.showModal = this.showModal.bind(this);
     this.hideModal = this.hideModal.bind(this);
     this.get_results = this.get_results.bind(this);
+    this.render_results = this.render_results.bind(this);
+  }
+
+  showModal(data){
+    this.setState({
+      show: true,
+      modal: data
+    });
+  }
+
+  hideModal(){
+    this.setState({show: false});
+  }
+
+  componentDidMount() {
+    this.get_results(JSON.parse(this.props.data));
   }
 
   get_results(data) {
@@ -371,20 +382,28 @@ class Content extends React.Component {
         this.setState({
           target: response.results.target,
           modality: response.results.modality,
-          num_results: response.results.results.length
+          num_results: response.results.results.length,
+          results: response.results
         });
       })
   }
 
-  showModal(data){
-    this.setState({
-      show: true,
-      modal: data
-    });
-  }
-
-  hideModal(){
-    this.setState({show: false});
+  render_results() {
+    if (this.state.results !== null) {
+      return (
+        <Results 
+          results={this.state.results}
+          server_url={this.state.server_url} 
+          clickHandler={this.showModal}/>);
+    } else {
+      return (
+        <div className="row w-100 py-5">
+          <div className="col text-center">
+            <h1>Loading results...</h1>
+          </div>
+        </div>
+      );
+    }
   }
 
   render() {
@@ -394,10 +413,8 @@ class Content extends React.Component {
           target={this.state.target}
           modality={this.state.modality}
           server_url={this.state.server_url}/>
-        {/* <Results 
-          data={this.state} 
-          clickHandler={this.showModal}/>
-        <Modal 
+        {this.render_results()}
+        {/* <Modal 
           data={this.state} 
           clickHandler={this.hideModal}/> */}
       </div>

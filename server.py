@@ -75,6 +75,7 @@ def handle_search(request, engine):
         "results": [str(x) for x in engine.idx_to_target(idx, index.name)],
         "modality": modality,
         "num_results": num_results,
+        "index_modality": index.modality,
     }
     print("Search handled successfully.")
     return results
