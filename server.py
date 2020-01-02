@@ -1,4 +1,5 @@
 from flask import Flask, request, redirect, url_for, send_from_directory, jsonify
+from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import os
 import logging
@@ -13,6 +14,7 @@ UPLOAD_DIR = "uploads/"
 ALLOWED_EXTENSIONS = {"image": set(["png", "jpg", "jpeg"])}
 
 server = Flask(__name__)
+CORS(server)
 engine = load_engine(ENGINE_NAME)
 
 def handle_search(request, engine):

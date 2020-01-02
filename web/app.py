@@ -56,11 +56,14 @@ def make_request(request, modality):
         raise RuntimeError("Error decoding response from server: {}".format(r.content.decode()))
 
 @app.route("/")
-def home():
+def index():
     print("\n\nHome page request")
     info = requests.get(f"{SERVER_URL}/info", data = {"supported_modalities": True}).json()
-    data = {"supported_modalities" : info["supported_modalities"]}
-    return render_template("home.html", data = data)
+    data = {
+        "supported_modalities": info["supported_modalities"],
+        "server_url": SERVER_URL
+        }
+    return render_template("index.html", data = json.dumps(data))
 
 @app.route("/query/<modality>", methods=["GET", "POST"])
 def query(modality):

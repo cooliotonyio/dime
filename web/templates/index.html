@@ -9,9 +9,9 @@
 {% endblock %}
 
 {% block scripts %}
-<script type="text/jsx" src="{{url_for('static', filename='js/results.js')}}"></script>
+<script type="text/jsx" src="{{url_for('static', filename='js/search.js')}}"></script>
 <script type="text/jsx">
-    var search = <Search data="{{data}}"/>;
-    ReactDOM.render(content, document.getElementById("search"));
+  var search = <Search data="{{data}}"/>;
+  ReactDOM.render(search, document.getElementById("search"));
 </script>
 {% endblock %}
