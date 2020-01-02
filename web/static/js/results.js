@@ -7,7 +7,7 @@ class Image extends React.Component {
         <img 
           className="w-100" 
           src={this.props.source}
-          onClick ={(event) => this.props.clickHandler(this.props)}>
+          onClick ={(event) => this.props.click_handler(this.props.i)}>
         </img>
       </div>
     )
@@ -64,66 +64,85 @@ class LineGraph extends React.Component {
 class Modal extends React.Component {
   constructor(props) {
     super(props);
-    this.createMetadata = this.createMetadata.bind(this);
-    this.createActions = this.createActions.bind(this);
+    this.create_metadata = this.create_metadata.bind(this);
+    this.create_actions = this.create_actions.bind(this);
+    this.render_target = this.render_target.bind(this);
+    this.use_as_query = this.use_as_query.bind(this);
   }
 
-  createMetadata(data) {
+  create_metadata() {
+    let results = this.props.results;
+    let i = this.props.i;
     return (
       <div id="modalMetadata">
         <h2>Metadata</h2>
         <p>
-          Distance: {data.distance}<br/>
-          Dataset: {data.dataset}<br/>
-          Binarized: {data.binarized.toString()}<br/>
-          Index: {data.idx}<br/>
-          Model: {data.model}<br/>
-          Model Desc: {data.model_info.desc}<br/>
-          Model Output Dim: {data.model_info.output_dimension}<br/>
-          Source: <a href={data.source}>{data.source}</a></p>
+          Distance: {results.dis[i]}<br/>
+          Dataset name: {results.dataset_name}<br/>
+          Index name: {results.index_name}<br/>
+          Post processing: {results.post_processing}<br/>
+          Idx: {results.idx[i]}<br/>
+          Model name: {results.model_name}<br/>
+          Modality: {results.index_modality}<br/>
+          Target: {results.results[i]}</p>
       </div>
     )
   }
 
-  createActions(data) {
+  use_as_query() {
+    let results = this.props.results;
+    const data = {
+      target: results.idx[this.props.i],
+      modality: "dataset",
+      dataset_name: results.dataset_name,
+      num_results: results.num_results,
+      index_name: results.index_name,
+    }
+    window.location.href = window.location.origin + "/query?" + $.param(data);
+  }
+
+  create_actions() {
     return (
       <div id="modalActions">
         <h2>Actions</h2>
-        <form action="/query/dataset" method="POST">
-          <div className="form-group d-none">
-            <input name="query_input" type="text" value={data.source} readOnly/>
-            <input name="dataset"  type="text" value={data.dataset} readOnly/>
-            <input name="target"  type="text" value={data.idx} readOnly/>
-            <input name="model" type="text" value={data.model} readOnly/>
-            <input name="binarized" type="text" value={data.model ? 1 : 0} readOnly/>
-            <input name="num_results" type="text" value={this.props.num_results} readOnly/>
-          </div>
-          <button type="submit" className="btn btn-primary">Use As Query</button>
-        </form> 
         <button className="btn btn-warning" 
-          onClick={(event)=>this.props.clickHandler()}>
+          onClick={(event)=>this.props.close_modal()}>
           Close Modal</button>
+        <button className="btn btn-info px-2"
+          onClick={(event)=>this.use_as_query()}>
+          Use as query</button>
       </div>
     )
   }
 
+  render_target(){
+    const target = this.props.results.results[this.props.i];
+
+    if ("text" === this.props.results.index_modality) {
+      return <h2>{target}</h2>
+    }
+
+    if ("image" === this.props.results.index_modality) {
+      return <img src={this.props.server_url + "/" + target}/>
+    }
+  }
+
   render() {
-    if (this.props.show){
-      var data = this.props.data;
+    if (this.props.i !== null){
       return (
         <div id="modal" className="result-modal d-block">
           <div className="result-modal-body">
             <div className="row w-100 my-5 justify-content-center">
               <div className="col-8 text-center">
-                <img src={data.source}></img>
+                {this.render_target()}
               </div>
             </div>
             <div className="row w-100 my-5 justify-content-center">
               <div className="col-3">
-                {this.createActions(data)}
+                {this.create_actions()}
               </div>
               <div className="col-5">
-                {this.createMetadata(data)}
+                {this.create_metadata()}
               </div>
             </div>
           </div>
@@ -142,22 +161,31 @@ class Header extends React.Component {
     this.create_tags = this.create_tags.bind(this);
     this.set_tags = this.set_tags.bind(this);
     this.state = {
-      tags: ["Loading tags..."]
+      tags: ["Loading tags..."],
+      modality: this.props.data.modality,
+      target: this.props.data.target
     }
+    console.log(props)
   }
 
   set_tags() {
     let form_data = new FormData();
-    form_data.append("modality", this.props.modality)
-    form_data.append("target", this.props.target)
-    form_data.append("num_results", "30")
-    fetch(this.props.server_url + "/query", {
+    form_data.append("modality", this.props.data.modality)
+    form_data.append("target", this.props.data.target)
+    form_data.append("num_results", this.props.data.num_results)
+    if (this.props.data.modality === "dataset") {
+      form_data.append("dataset_name", this.props.data.dataset_name)
+    }
+    console.log(this.props.data)
+    fetch(this.props.data.server_url + "/query", {
       method: "POST",
       body: form_data})
       .then(r => r.json())
       .then((response) => {
         this.setState({
-          tags: response.results.results
+          tags: response.results.results,
+          modality: response.results.modality,
+          target: response.results.target
         });
       })
   }
@@ -167,11 +195,11 @@ class Header extends React.Component {
   }
 
   create_query_input() {
-    switch(this.props.modality) {
+    switch(this.state.modality) {
       case "text":
-        return this.props.target;
+        return this.state.target;
       case "image":
-        return <img height='100' src={this.props.server_url+"/"+this.props.target}/>;
+        return <img height='100' src={this.props.data.server_url+"/"+this.state.target}/>;
     }  
   }
 
@@ -193,7 +221,7 @@ class Header extends React.Component {
         </div>
         <div className="row justify-content-center">
           <div className="col-1 text-center">
-            <h4>Modality:</h4> {this.props.modality}<br/>
+            <h4>Modality:</h4> {this.props.data.modality}<br/>
             <a className="btn btn-primary pt-3" role="button" href="/">Search Another</a>
           </div>
           <div className="col-4 text-center">
@@ -233,7 +261,6 @@ class ResultsHeader extends React.Component {
       .then(result => result.json())
       .then(
         (result) => {
-          console.log(result)
           this.setState({available_indexes: result.available_indexes})},
         (error) => {
           console.log(error);
@@ -253,8 +280,7 @@ class ResultsHeader extends React.Component {
   }
 
   createTabs() {
-    console.log(this.state)
-    var tabs = []
+    var tabs = [];
     if (this.state.available_indexes !== null) {
       for (let [i, index_name] of this.state.available_indexes.entries()) {
         if (index_name === this.props.results.index_name){
@@ -310,23 +336,31 @@ class ResultsBody extends React.Component {
   constructor(props) {
     super(props);
     this.createResults = this.createResults.bind(this);
+    this.handle_click = this.handle_click.bind(this);
   }
 
-  createResults(){
+  handle_click(i) {
+    this.props.click_handler(i)
+  }
+
+  createResults() {
     var results = []
     if ("image" === this.props.results.index_modality) {
       for (let [i, result] of this.props.results.results.entries()){
         results.push(
           <Image
             key={i}
+            i={i}
             source={this.props.server_url + "/" + result}
-            clickHandler={this.props.clickHandler}/>
+            click_handler={this.handle_click}/>
           )
       }
     } else if ("text" === this.props.results.index_modality) {
       for (let [i, result] of this.props.results.results.entries()){
         results.push(
-          <div className="col-2" key={i}>
+          <div className="col-2" 
+            key={i}
+            onClick={(e)=>{this.handle_click(i)}}>
             <h4>{i+1}. {result}</h4>
           </div>)
       }
@@ -359,7 +393,7 @@ class Results extends React.Component{
         <ResultsBody 
           results = {this.props.results}
           server_url = {this.props.server_url}
-          clickHandler = {this.props.clickHandler}/>
+          click_handler = {this.props.click_handler}/>
       </div>
     )
   }
@@ -368,34 +402,35 @@ class Results extends React.Component{
 class Content extends React.Component {
   constructor(props) {
     super(props);
-    const data = JSON.parse(this.props.data);
+    var data = JSON.parse(this.props.data);
     this.state = {
       modal: null,
-      show: false,
       server_url: data.server_url,
       target: data.target,
       modality: data.modality,
+      num_results: data.num_results,
+      index_name: data.index_name,
       results: null,
+      data: data
     };
-    this.showModal = this.showModal.bind(this);
-    this.hideModal = this.hideModal.bind(this);
+    this.show_modal = this.show_modal.bind(this);
+    this.close_modal = this.close_modal.bind(this);
     this.get_results = this.get_results.bind(this);
     this.render_results = this.render_results.bind(this);
   }
 
-  showModal(data){
+  show_modal(i){
     this.setState({
-      show: true,
-      modal: data
+      modal: i
     });
   }
 
-  hideModal(){
-    this.setState({show: false});
+  close_modal(){
+    this.setState({modal: null});
   }
 
   componentDidMount() {
-    this.get_results(JSON.parse(this.props.data));
+    this.get_results(this.state.data);
   }
 
   get_results(data) {
@@ -404,6 +439,10 @@ class Content extends React.Component {
     form_data.append("target", data.target)
     form_data.append("index_name", data.index_name)
     form_data.append("num_results", data.num_results)
+    if (data.dataset_name) {
+      form_data.append("dataset_name", data.dataset_name)
+    }
+
     fetch(data.server_url + "/query", {
       method: "POST",
       body: form_data})
@@ -424,7 +463,7 @@ class Content extends React.Component {
         <Results 
           results={this.state.results}
           server_url={this.state.server_url} 
-          clickHandler={this.showModal}/>);
+          click_handler={this.show_modal}/>);
     } else {
       return (
         <div className="row w-100 py-5">
@@ -436,17 +475,20 @@ class Content extends React.Component {
     }
   }
 
+  render_modal() {
+    return (<Modal 
+      i={this.state.modal}
+      results={this.state.results} 
+      close_modal={this.close_modal} 
+      server_url={this.state.server_url}/>)
+  }
+
   render() {
     return (
       <div>
-        <Header 
-          target={this.state.target}
-          modality={this.state.modality}
-          server_url={this.state.server_url}/>
+        <Header data={this.state.data}/>
         {this.render_results()}
-        {/* <Modal 
-          data={this.state} 
-          clickHandler={this.hideModal}/> */}
+        {this.render_modal()}
       </div>
     )
   }

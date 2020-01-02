@@ -57,7 +57,7 @@ def handle_search(request, engine):
     elif "dataset" == modality:
         dataset = engine.datasets[request.values["dataset_name"]]
         modality = dataset.modality
-        target = engine.idx_to_target(request.values["target"], dataset.name)
+        target = engine.idx_to_target(int(target), dataset.name)
         tensor = engine.target_to_tensor(target, dataset_name = dataset.name)
     else:
         raise RuntimeError(f"Modality '{modality} not supported")
@@ -179,9 +179,9 @@ def handle_query():
             response["results"] = handle_search(request, engine)
         except Exception as e:
             response["error"] = str(e.__repr__())
-        return jsonify(response)
     else:
-        return "Request missing either 'target' or 'modality'", 400
+        response["error"] = "Request missing either 'target' or 'modality'"
+    return jsonify(response)
 
 if __name__ == "__main__":
     if not os.path.isdir(UPLOAD_DIR):

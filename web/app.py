@@ -28,9 +28,11 @@ def query():
                 "modality": request.values["modality"],
                 "target": request.values["target"],
                 "index_name": request.values["index_name"],
-                "num_results": int(request.values["num_results"]),
+                "num_results": request.values["num_results"],
                 "server_url": SERVER_URL
             }
+            if "dataset_name" in request.values:
+                data["dataset_name"] = request.values["dataset_name"]
             return render_template("results.html", data=json.dumps(data))
         except Exception as err:
             print(err)
