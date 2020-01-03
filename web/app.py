@@ -12,7 +12,6 @@ logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 @app.route("/")
 def index():
-    print("\n\nHome page request")
     info = requests.get(f"{SERVER_URL}/info", data = {"supported_modalities": True}).json()
     data = {
         "supported_modalities": info["supported_modalities"],

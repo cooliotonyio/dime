@@ -16,6 +16,8 @@ def load_dataset(engine, dataset_name):
     if "image" == dataset_params["modality"]:
         return ImageDataset(engine, dataset_params)
     elif "text" == dataset_params["modality"]:
+        if os.path.isfile(f"{engine.dataset_dir}/{dataset_name}.data.pkl"):
+            dataset_params["data_file"] = f"{dataset_name}.data.pkl"
         assert "data" in dataset_params or "data_file" in dataset_params, "Dataset parameters needs to specify data"
         if "data" not in dataset_params:
             with open(f"{engine.dataset_dir}/{dataset_params['data_file']}", "rb") as f:

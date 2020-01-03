@@ -157,7 +157,7 @@ class SearchEngine():
                 else:
                     break
             else:
-                print(t_shape, m_dim)
+                print(f"UNCOMPATIBLE SHAPES: {t_shape}, {m_dim}")
                 raise RuntimeError(f"Provided tensor of shape '{t_shape}' not compatible with index model '{model.name}'")
 
         embeddings = self.get_embedding(model.name, batch, tensor_modality, preprocessing = preprocessing)
