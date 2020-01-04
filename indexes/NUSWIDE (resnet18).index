@@ -1,0 +1,1 @@
+{"name": "NUSWIDE (resnet18)", "model_name": "resnet18", "dataset_name": "nuswide", "desc": "The index corresponding to resnet18 and nuswide", "modality": "image", "dim": [512]}

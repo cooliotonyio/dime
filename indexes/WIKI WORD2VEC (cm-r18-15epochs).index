@@ -1,0 +1,1 @@
+{"name": "WIKI WORD2VEC (cm-r18-15epochs)", "model_name": "cm-r18-15epochs", "dataset_name": "wiki_word2vec", "desc": "The index corresponding to cm-r18-15epochs model and wiki_word2vec", "modality": "text", "dim": [200]}

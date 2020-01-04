@@ -1,0 +1,1 @@
+{"name": "cm-r152-5epochs", "modalities": ["image", "text"], "input_dim": [[2048], [300]], "output_dim": [200], "desc": "5 epoch adversarial cross-modal triplet-loss retrieval trained with resnet152 features and wiki word2vec", "preprocessors": ["resnet152", null]}

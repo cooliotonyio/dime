@@ -1,0 +1,1 @@
+{"name": "NUSWIDE (cm-r152-15epochs)", "model_name": "cm-r152-15epochs", "dataset_name": "nuswide", "desc": "The index corresponding to cm-r152-15epochs model and nuswide", "modality": "image", "dim": [200]}

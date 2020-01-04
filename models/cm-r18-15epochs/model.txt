@@ -1,0 +1,1 @@
+{"name": "cm-r18-15epochs", "modalities": ["image", "text"], "input_dim": [[512], [300]], "output_dim": [200], "desc": "15 epoch adversarial cross-modal triplet-loss retrieval trained with resnet18 features and wiki word2vec", "preprocessors": ["resnet18", null]}

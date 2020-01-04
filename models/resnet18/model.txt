@@ -1,0 +1,1 @@
+{"name": "resnet18", "modalities": ["image"], "input_dim": [[3, 224, 224]], "output_dim": [512], "desc": "Resnet18 with the last layer removed for feature extraction", "preprocessors": [null]}

@@ -4,10 +4,8 @@ Running this script will fetch and cache all necessary datasets
 If datasets have already been downloaded to data_zipped, 
 this script will only extract/process/pickle the downloaded dataset
 
-If a re-download is desired, simple change FORCE_DOWNLOAD to True
+If a re-download is desired, simple change force to True
 """
-
-
 import os
 import io
 import torch
@@ -15,7 +13,29 @@ import pickle
 import tarfile
 import time
 from zipfile import ZipFile
-from util import fetch_and_cache
+import requests
+from pathlib import Path
+
+def fetch_and_cache(data_url, file, data_dir="data", force=False):
+    """
+    Download and cache a url and return the object file path.
+    """
+    data_dir = Path(data_dir)
+    data_dir.mkdir(exist_ok = True)
+    file_path = data_dir / Path(file)
+    if force and file_path.exists():
+        file_path.unlink()
+    if force or not file_path.exists():
+        print('Downloading...', end=' ')
+        resp = requests.get(data_url)
+        with file_path.open('wb') as f:
+            f.write(resp.content)
+        print('Done!')
+        last_modified_time = time.ctime(file_path.stat().st_mtime)
+    else:
+        last_modified_time = time.ctime(file_path.stat().st_mtime)
+        print("Using cached version that was downloaded (UTC):", last_modified_time)
+    return file_path
 
 FORCE_DOWNLOAD = False
 start_time = time.time()
@@ -107,10 +127,5 @@ print("Extracting NUSWIDE... (this might take some time)")
 image_data = tarfile.open("./data_zipped/flickr.tar.gz")
 image_data.extractall(path='./data')
 print("Done extracting NUSWIDE!")
-
-print("Extracting NUSWIDE ResNet features... (this will take a lot of time)")
-os.system("python3 feature_extractors/resnet152_nuswide_processor.py")
-os.system("python3 feature_extractors/resnet18_nuswide_processor.py")
-print("Done extracting features!")
 
 print("Finished setup in {} seconds!".format(time.time() - start_time))

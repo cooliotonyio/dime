@@ -1,16 +1,12 @@
 import numpy as np
 from PIL import Image
 import os
-import torchvision as tv
-from torchvision import transforms
-from torch.utils.data import Dataset
-from torch.utils.data.sampler import BatchSampler
 import torch
 import pickle
 import random
 import numpy as np
 
-class BaseCMRetrievalDataset(Dataset):
+class BaseCMRetrievalDataset(torch.utils.data.Dataset):
     """
     Description:
         Base dataset to build off of for other datasets for crossmodal retrieval tasks
@@ -316,7 +312,10 @@ class NUS_WIDE(BaseCMRetrievalDataset):
         target = self._folder_targets[index]
 
         if self.feature_mode is not 'vanilla':
-            sample = self.features[self.image_paths[index]]
+            image_path = self.image_paths[index]
+            if image_path[0] == ".":
+                image_path = image_path[2:]
+            sample = self.features[image_path]
             target = self._folder_targets[index]
             return index, sample, target
 
@@ -506,27 +505,3 @@ class NUS_WIDE(BaseCMRetrievalDataset):
             return self.word_embeddings[random_tag]
 
         return random_tag
-
-
-# Dataset used for nearest neighbors loading
-class NUS_WIDE_KNN(NUS_WIDE):
-    def __init__(self, root, transform, feature_mode='resnet152', train=True):
-        super(NUS_WIDE_KNN, self).__init__(root, transform, train=False)
-
-    def __getitem__(self, index):
-        """
-        Args:
-            index (int): Index
-        Returns:
-            tuple: (sample, target) where target is class_index of the target class.
-        """
-
-        if self.features is not None:
-            return self.features[self.image_paths[index]], index
-        return self.transform(self.imgs[index][0]), index # TODO: FIX
-
-    def get_text_label(self, index):
-        return self.text_labels[self.imgs[index][1]]
-
-    def get_raw_image(self, index):
-        return self.imgs[index][0]
