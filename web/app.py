@@ -3,12 +3,10 @@ from werkzeug.utils import secure_filename
 import requests
 import os
 import json
-import logging
 
 SERVER_URL = "http://0.0.0.0:5000"
 
 app = Flask(__name__)
-logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 @app.route("/")
 def index():

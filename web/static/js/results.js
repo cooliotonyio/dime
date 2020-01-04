@@ -318,7 +318,7 @@ class ResultsHeader extends React.Component {
         </div>
         <div className="row justify-content-center">
         <div className="col-5 text-center">
-          <div className="btn-group" role="group" aria-label="Basic example">
+          <div className="btn-group tabs-scroll w-100" role="group" aria-label="Basic example">
             {this.createTabs()}
           </div>
         </div>

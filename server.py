@@ -8,7 +8,6 @@ import logging
 from dime.engine import load_engine
 from dime.utils import allowed_file, in_and_true, sanitize_dict
 
-logging.getLogger('werkzeug').setLevel(logging.ERROR)
 ENGINE_NAME = "demo_engine.engine"
 UPLOAD_DIR = "uploads/"
 ALLOWED_EXTENSIONS = {"image": set(["png", "jpg", "jpeg"])}

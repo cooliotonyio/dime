@@ -141,7 +141,7 @@ class AvailableIndexes extends React.Component{
       <div className="row justify-content-center w-100 py-5">
         <div className="col-6 text-center">
           <h2>Available indexes for {this.props.selected_modality}</h2>
-          <div className="btn-group" role="group" aria-label="search modalities">
+          <div className="btn-group tabs-scroll w-100" role="group" aria-label="search modalities">
             {this.render_available_indexes()}
           </div>
         </div>
