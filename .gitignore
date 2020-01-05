@@ -1,7 +1,6 @@
 data/
 data_zipped/
+embeddings/
 __pycache__
 .ipynb_checkpoints
-pickles/
-embeddings/
-uploads/
+.vscode

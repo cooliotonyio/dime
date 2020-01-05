@@ -1,0 +1,17 @@
+{% extends "_template.html" %}
+
+{% block style %}
+  <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='css/style.css')}}"/>
+{% endblock %}
+
+{% block content%}
+<div id="search"></div>
+{% endblock %}
+
+{% block scripts %}
+<script type="text/jsx" src="{{url_for('static', filename='js/search.js')}}"></script>
+<script type="text/jsx">
+  var search = <Search data="{{data}}"/>;
+  ReactDOM.render(search, document.getElementById("search"));
+</script>
+{% endblock %}

@@ -1,12 +1,11 @@
 {% extends "_template.html" %}
 
 {% block style %}
-  <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='css/results.css')}}"/>
+  <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='css/style.css')}}"/>
 {% endblock %}
 
 {% block content%}
 <div id="content"></div>
-<canvas id="myChart" width="400" height="400"></canvas>
 {% endblock %}
 
 {% block scripts %}

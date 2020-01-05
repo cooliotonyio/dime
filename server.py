@@ -1,293 +1,191 @@
 from flask import Flask, request, redirect, url_for, send_from_directory, jsonify
+from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import os
-import traceback
-import json
 import logging
 
-from torchvision import transforms
-from torchvision.datasets import ImageFolder
-from torch.utils.data import DataLoader
-import torch
-import PIL
-import pickle
-import numpy as np
+#TODO fix these
+from dime.engine import load_engine
+from dime.utils import allowed_file, in_and_true, sanitize_dict
 
-from search import SearchEngine
-from networks import FeatureExtractor
-
-EMBEDDING_DIR = ""
+ENGINE_NAME = "demo_engine.engine"
 UPLOAD_DIR = "uploads/"
-DATA_DIR = "data/"
-IMAGE_DIR = 'data/Flickr/'
-ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg'])
-FAST_TEXT = None
-EMBED_DIR = 'embeddings/'
-BATCH_SIZE = 128
-LOAD_EMBED = True
+ALLOWED_EXTENSIONS = {"image": set(["png", "jpg", "jpeg"])}
 
-app = Flask(__name__)
-logging.getLogger('werkzeug').setLevel(logging.ERROR)
+server = Flask(__name__)
+CORS(server)
+engine = load_engine(ENGINE_NAME)
 
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+def handle_search(request, engine):
+    """
+    Search through a given index and return results
     
-def target_to_tensor(target, modality):
-    search_engine = app.search_engine
+    Parameters:
+    target (str): The target to use as query
+    modality (str): Modality of the target
+    index_name (str): Name of the index to search in
+    num_results (int): Number of results to return
+    """
+    print("Handling search...")
+
+    target = request.values["target"]
+    modality = request.values["modality"]
+
+    print("Target:", target)
+    print("Modality:", modality)
+
+    if "num_results" in request.values:
+        num_results = int(request.values["num_results"])
+    else:
+        num_results = 30
+    
+    if "index_name" not in request.values:
+        print("Index name not provided, selecting first text index for tags")
+        index_name = engine.modalities["text"]["index_names"][0]
+        index = engine.indexes[index_name]
+    else:
+        index = engine.indexes[request.values["index_name"]]
+
+    print("Index:", index.name)
+
+    # Process target and convert to tensor
     if "text" == modality:
-        if target in FAST_TEXT:
-            tensor = FAST_TEXT[target]
-        else:
-            raise KeyError("No tensor representation of '{}' in text dataset".format(str(target)))
+        tensor = engine.target_to_tensor(target, modality = modality)
     elif "image" == modality:
-        image = PIL.Image.open(target)
-        image_transform = transforms.Compose([
-            transforms.Resize((224,224)),
-            transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
-        tensor = image_transform(image)
+        tensor = engine.target_to_tensor(target, modality = modality)
     elif "dataset" == modality:
-        dataset_name, idx = target
-        assert dataset_name in search_engine.datasets, "Target dataset '{}' not a valid dataset".format(dataset_name)
-        new_target = search_engine.target_from_idx(idx, dataset_name)[0]
-        new_modality = search_engine.datasets[dataset_name].modality
-        tensor, modality, target = target_to_tensor(new_target, new_modality)
+        dataset = engine.datasets[request.values["dataset_name"]]
+        modality = dataset.modality
+        target = engine.idx_to_target(int(target), dataset.name)
+        tensor = engine.target_to_tensor(target, dataset_name = dataset.name)
     else:
-        raise ValueError("Modality '{}' not supported in target_to_tensor".format(modality))
-    return tensor, modality, target
+        raise RuntimeError(f"Modality '{modality} not supported")
 
-def search(target, modality, n=5, model = None):
-    print("NEW SEARCH")
-    search_engine = app.search_engine
-    tensor, modality, target = target_to_tensor(target, modality)
-    valid_indexes = search_engine.valid_indexes(tensor, modality)
-    
-    if model is None:
-        model = valid_indexes[0][1]
-    assert sum([int(model == key[1]) for key in valid_indexes]), "Specified model '{}' not valid".format(model)
-    
-    target_indexes = [index_key for index_key in valid_indexes if index_key[1] == model]
-    
-    print(" -> Modality:         \t {}".format(modality))
-    print(" -> Tensor Shape:     \t {}".format(tensor.shape))
-    print(" -> Target:           \t '{}'".format(target))
-    print(" -> Model:            \t {}".format(model))
-    print(" -> Datasets:         \t {}".format([key[0] for key in target_indexes]))
-    print(" -> Num Results:      \t {}".format(n))
-    print(" -> Num Valid Indexes:\t {}".format(len(valid_indexes)))
-    
-    if modality == "image":
-        # TODO: Make this less dumb
-        tensor = tensor[None,:,:,:]
-        embedding = search_engine.get_embedding(tensor, model, modality, preprocessing = True)[0]
-    else:
-        embedding = search_engine.get_embedding(tensor, model, modality)
-    
-    results = []
-    for index_key in target_indexes:
-        dataset_name, model_name, binarized = index_key
-        dis, idx = search_engine.search(embedding, index_key, n = n)
-        results.append({
-            "dataset": dataset_name,
-            "model": model_name,
-            "is_binarized": binarized,
-            "dis": [float(d) for d in dis],
-            "idx": [int(i) for i in idx],
-            "data": [str(x) for x in search_engine.target_from_idx(idx, index_key)],
-            "modality": search_engine.datasets[dataset_name].modality,
-            "num_results": n,
-            "model_info": search_engine.models[model_name].get_info()
-        })
-    
-    print("SEARCH FINISHED, RETURNING {} RESULTS FROM {} INDEXES\n".format(n, len(target_indexes)))
-    valid_indexes = [list(i) + [search_engine.datasets[i[0]].modality] for i in valid_indexes]
-    return results, valid_indexes, modality
+    dis, idx = engine.search(tensor, modality, index.name, n = num_results, preprocessing=True)
+
+    results = {
+        "target": target,
+        "dataset_name": index.dataset_name,
+        "model_name": index.model_name,
+        "index_name": index.name,
+        "post_processing": index.post_processing,
+        "dis": [float(d) for d in dis],
+        "idx": [int(i) for i in idx],
+        "results": [str(x) for x in engine.idx_to_target(idx, index.name)],
+        "modality": modality,
+        "num_results": num_results,
+        "index_modality": index.modality,
+    }
+    print("Search handled successfully.")
+    return results
             
-@app.route('/uploads/<path:filename>')
-def uploads(filename):
+@server.route("/uploads/<path:filename>")
+def get_upload(filename):
     return send_from_directory(UPLOAD_DIR, filename, as_attachment=True)
 
-@app.route('/data/<path:filename>')
-def data(filename):
-    return send_from_directory(DATA_DIR, filename, as_attachment=True)
+@server.route("/data/<path:filename>")
+def get_data(filename):
+    return send_from_directory(engine.dataset_dir, filename, as_attachment=True)
 
-@app.route('/query/<modality>', methods=["POST"])
-def query(modality):
+@server.route("/file_upload/", methods=["POST"])
+def handle_upload():
+    print("\n\nRECEIVED UPLOAD")
+    response = {"error":"An unknown error occurred"}
     try:
-        # Determine modality and target
-        if "text" == modality:
-            target = request.values["text"]
-        elif "image" == modality:
-            if "file" in request.files:
-                f = request.files["file"]
-                if f.filename and allowed_file(f.filename):
-                    target = os.path.join(UPLOAD_DIR, secure_filename(f.filename))
-                    f.save(target)
-                else:
-                    raise RuntimeError("Filename '{}' not allowed".format(str(f.filename)))
-            else:
-                raise RuntimeError("No file attached to request")
-        elif "dataset" == modality:
-            target = [request.values["dataset"], int(request.values["target"])]
-        elif "prev_query" == modality:
+        if "modality" in request.values:
             modality = request.values["modality"]
-            if modality == "image":
-                target = os.path.join(UPLOAD_DIR, request.values["file"])
-            elif modality == "dataset":
-                target = [request.values["dataset"], int(request.values["target"])]
-            elif modality == "text":
-                target = request.values["text"]
+            print(f"File upload modality: {modality}")
+            if "image" == modality:
+                if "file" in request.files:
+                    f = request.files["file"]
+                    if f.filename and allowed_file(f.filename, ALLOWED_EXTENSIONS[modality]):
+                        target = os.path.join(UPLOAD_DIR, secure_filename(f.filename))
+                        f.save(target)
+                        response["target"] = target
+                        response["error"] = False
+                        print(f"Saved '{target}'")
+                    else:
+                        response["error"] = f"Filename '{f.filename}' not allowed"
+                else:
+                    response["error"] = "No 'file' attached to request.files"
+            else:
+                response["error"] = f"Modality '{modality}' not supported by file_upload"
         else:
-            raise RuntimeError("Modality '{}' not supported in query".format(modality))
-        
-        # Figure out how many results
-        if "num_results" in request.values:
-            num_results = int(request.values["num_results"])
-        else:
-            num_results = 10
-            
-        if "index_key" in request.values:
-            #TODO: make this cleaner somehow
-            index_key = str(request.values["index_key"])
-            model = [(i.strip()) for i in index_key[1:-1].split(",")][1][1:-1]
-        else:
-            model = None
-        
-        # Search and return results
-        results, valid_indexes, input_modality = search(target, modality, n = num_results, model = model)
-        response = {
-            "input_target": target,
-            "input_modality": input_modality,
-            "valid_indexes": valid_indexes,
-            "num_results": num_results,
-            "results": results
-        }
-        return jsonify(response)
-    
-    except Exception as err:
-        traceback.print_tb(err.__traceback__)
-        print(str(err))
-        return "Query Error: {}".format(str(err))
-    
-def init_engine(app):
-    # Instantiate SearchEngine Object
-    search_engine = SearchEngine(["text", "image"], save_directory = EMBED_DIR, verbose = True, cuda=True)
+            response["error"] = "No modality specified"
+    except Exception as e:
+        response["error"] = e.__repr__()
+    finally:
+        return jsonify(sanitize_dict(response))
 
-    # Add models
-    # hard-coded numerical values are specific to each model
-    print("Loading models")
-    resnet152_15 = pickle.load(open("pickles/models/entire_nuswide_model_15.p", "rb"))
-    resnet152_5 = pickle.load(open("pickles/models/entire_nuswide_model_5.p", "rb"))
-    resnet18_5 = pickle.load(open("pickles/models/entire_nuswide_model_5-18.p", "rb"))
+@server.route("/info")
+def handle_info():
+    info = {}
+    # Available
+    if in_and_true("available_indexes", request.values):
+        modality = request.values["available_indexes"]
+        info["available_indexes"] = engine.valid_index_names(modality)
+    if in_and_true("available_models", request.values):
+        info["available_models"] = [m for m in engine.models.values() if modality in m.modalities]
+
+    # Listing all 
+    if in_and_true("all_datasets", request.values):
+        info["all_datasets"] = list(engine.datasets.keys())
+    if in_and_true("all_indexes", request.values):
+        info["all_indexes"] = list(engine.indexes.keys())
+    if in_and_true("all_models", request.values):
+        info["all_models"] = list(engine.models.keys())
+
+    # Params info
+    if in_and_true("dataset_params", request.values):
+        dataset = engine.datasets[request.values["dataset_params"]]
+        info["dataset_params"] = sanitize_dict(dataset.params)
+    if in_and_true("index_params", request.values):
+        index = engine.indexes[request.values["index_params"]]
+        info["index_params"] = sanitize_dict(index.params)
+    if in_and_true("model_params", request.values):
+        model = engine.models[request.values["model_params"]]
+        info["model_params"] = sanitize_dict(model.params) 
+    if in_and_true("engine_params", request.values):
+        info["engine_params"] = sanitize_dict(engine.params)
+
+    # Misc
+    if in_and_true("supported_modalities", request.values):
+        info["supported_modalities"] = list(engine.modalities.keys())
+    if in_and_true("alive", request.values):
+        info["alive"] = True
     
-    print("Adding models")
-    search_engine.add_model(
-        name = "ResNet152_15", 
-        modalities = ["image","text"], 
-        embedding_nets = [resnet152_15.modalityOneNet, resnet152_15.modalityTwoNet],
-        input_dimensions= [(2048,), (300,)], 
-        output_dimension = 64, 
-        desc = "ResNet152 model trained with 15 epochs")
-    search_engine.add_model(
-        name = "ResNet152_5", 
-        modalities = ["image","text"], 
-        embedding_nets = [resnet152_5.modalityOneNet, resnet152_5.modalityTwoNet],
-        input_dimensions= [(2048,), (300,)], 
-        output_dimension = 64, 
-        desc = "ResNet152 model trained with 5 epochs")
-    search_engine.add_model(
-        name = "ResNet18_5", 
-        modalities = ["image","text"], 
-        embedding_nets = [resnet18_5.modalityOneNet, resnet18_5.modalityTwoNet],
-        input_dimensions= [(512,), (300,)], 
-        output_dimension = 64, 
-        desc = "ResNet18 model trained with 5 epochs")
-    
-    # Since our datasets will use nus-wide feature vectors as the dataset instead of PIL.Image,
-    # we need to add preprocessing feature extractor to deal with images received as a search input
-    print("Adding preprocessors")
-    search_engine.models["ResNet152_15"].add_preprocessing("image", FeatureExtractor("resnet152").get_embedding)
-    search_engine.models["ResNet152_5"].add_preprocessing("image", FeatureExtractor("resnet152").get_embedding)
-    search_engine.models["ResNet18_5"].add_preprocessing("image", FeatureExtractor("resnet18").get_embedding)
-    
-    
-    # Importing datasets...
-    print("Loading datasets")
-    image_from_idx = [i[0] for i in ImageFolder(IMAGE_DIR).samples] # Gets all filenames (targets)
-    
-    # Feature vectors from ResNet18
-    image_data18 = np.array([])
-    directory_18 = "data/nuswide_features/resnet18/"
-    filenames = sorted(["{}/{}".format(directory_18, filename) 
-                        for filename in os.listdir(directory_18) if filename[-3:] == "npy"])
-    for filename in filenames:
-        image_data18 = np.append(image_data18, np.load(filename,))
-    image_data18.resize(len(image_data18) // 512, 512) # resizing one long 1D vector into appropriate size
-    image_data18 = torch.from_numpy(image_data18).cuda().float()
-    
-    # Feature vectors from ResNet152
-    image_data152 = np.array([])
-    directory_152 = "data/nuswide_features/resnet152/"
-    filenames = sorted(["{}/{}".format(directory_152, filename) 
-                        for filename in os.listdir(directory_152) if filename[-3:] == "npy"])
-    for filename in filenames:
-        image_data152 = np.append(image_data152, np.load(filename).astype('float32'))
-    image_data152.resize(len(image_data152) // 2048, 2048)
-    image_data152 = torch.from_numpy(image_data152).cuda().float()
-    
-    # Fasttext
-    global FAST_TEXT
-    FAST_TEXT = pickle.load(open("pickles/word_embeddings/word_embeddings_tensors.p", "rb"))
-    fast_text = FAST_TEXT
-    text_from_idx = [None] * len(fast_text)
-    text_data = [None] * len(fast_text)
-    for idx, (key, value) in enumerate(fast_text.items()):
-        text_from_idx[idx] = key
-        text_data[idx] = value.cuda()
-        
-    # Dataloaders (not really necessary if we've already extracted embeddings)
-    image18_dataloader = DataLoader(image_data18, batch_size = BATCH_SIZE)
-    image152_dataloader = DataLoader(image_data152, batch_size = BATCH_SIZE)
-    text_dataloader = DataLoader(text_data, batch_size = BATCH_SIZE)
-    
-    # Finally adding the datasets to SearchEngine
-    print("Adding datasets")
-    search_engine.add_dataset(
-        name = "nus-wide_18", 
-        data = image18_dataloader, 
-        targets = image_from_idx, 
-        modality = "image", 
-        dimension = (512,))
-    search_engine.add_dataset(
-        name = "nus-wide_152", 
-        data = image152_dataloader, 
-        targets = image_from_idx, 
-        modality = "image", 
-        dimension = (2048,))
-    search_engine.add_dataset(
-        name = "fast_text", 
-        data = text_dataloader, 
-        targets = text_from_idx, 
-        modality = "text", 
-        dimension = (300,))
-    
-    # Build Indexes
-    print("Building Indexes")
-    search_engine.build_index(dataset_name = "nus-wide_18", model_name = "ResNet18_5", load_embeddings = LOAD_EMBED)
-    search_engine.build_index(dataset_name = "nus-wide_152", model_name = "ResNet152_5", load_embeddings = LOAD_EMBED)
-    search_engine.build_index(dataset_name = "nus-wide_152", model_name = "ResNet152_15", load_embeddings = LOAD_EMBED)
-    search_engine.build_index(dataset_name = "fast_text", model_name = "ResNet18_5", load_embeddings = LOAD_EMBED)
-    search_engine.build_index(dataset_name = "fast_text", model_name = "ResNet152_5", load_embeddings = LOAD_EMBED)
-    search_engine.build_index(dataset_name = "fast_text", model_name = "ResNet152_15", load_embeddings = LOAD_EMBED)
-    
-    # Done
-    print("Finished initializing SearchEngine")
-    app.search_engine = search_engine
-    
+    return jsonify(sanitize_dict(info))
+
+@server.route("/query", methods=["POST"])
+def handle_query():
+    """
+    Returns page of results based on request
+
+    request.values = {
+        "modality",
+        "target",
+        "index_name",
+        "num_results",
+    }
+    """
+    print("\n\nRECEIVED QUERY")
+    if in_and_true("target", request.values) and in_and_true("modality", request.values):
+        response = {
+            "initial_target": request.values["target"],
+            "initial_modality": request.values["modality"],
+        }
+        try:
+            response["results"] = handle_search(request, engine)
+        except Exception as e:
+            response["error"] = str(e.__repr__())
+    else:
+        response["error"] = "Request missing either 'target' or 'modality'"
+    return jsonify(response)
+
 if __name__ == "__main__":
-    init_engine(app)
-    app.run(
-        host=os.getenv('LISTEN', '0.0.0.0'),
-        port=int(os.getenv('PORT', '80'))
+    if not os.path.isdir(UPLOAD_DIR):
+        os.makedirs(UPLOAD_DIR)
+    server.run(
+        host=os.getenv("LISTEN", "0.0.0.0"),
+        port=int(os.getenv("PORT", "5000"))
     )
